@@ -1,6 +1,13 @@
 import SwiftUI
 
 public struct ContentView: View {
+    public enum AppTab: Hashable {
+        case profile
+        case inventory
+        case settings
+    }
+
+    @State private var selectedTab: AppTab = .profile
     @State private var sessionStore = SteamSessionStore()
     @State private var steamIDInput: String = ""
     @State private var apiKeyInput: String = ""
@@ -22,41 +29,108 @@ public struct ContentView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ZStack {
-                AppTheme.Colors.oledBlack
-                    .ignoresSafeArea()
+        TabView(selection: $selectedTab) {
+            // TAB 1: Profile & Keychain Setup
+            NavigationStack {
+                ZStack {
+                    AppTheme.Colors.oledBlack
+                        .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 18) {
-                        headerBanner
-                        keychainStatusCard
-                        profileSummaryCard
-                        credentialsFormCard
+                    ScrollView {
+                        VStack(spacing: 18) {
+                            headerBanner
+                            keychainStatusCard
+                            profileSummaryCard
+                            credentialsFormCard
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                }
+                .navigationTitle("SKICE // CS2")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarColorScheme(.dark, for: .navigationBar)
+                .toolbarBackground(AppTheme.Colors.oledBlack, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .onAppear {
+                    if let savedID = sessionStore.storedSteamID64 {
+                        steamIDInput = savedID
+                    }
+                }
+                .sheet(isPresented: $isShowingSteamAPIKeyPortal) {
+                    SafariView(url: Self.steamAPIKeyPortalURL)
+                        .ignoresSafeArea()
                 }
             }
-            .navigationTitle("SKICE // CS2")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(AppTheme.Colors.oledBlack, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .onAppear {
-                if let savedID = sessionStore.storedSteamID64 {
-                    steamIDInput = savedID
+            .tabItem {
+                Label("Profile", systemImage: "person.badge.key.fill")
+            }
+            .tag(AppTab.profile)
+
+            // TAB 2: CS2 Inventory
+            NavigationStack {
+                if let steamID64 = sessionStore.storedSteamID64, !steamID64.isEmpty {
+                    InventoryView(steamID64: steamID64)
+                } else {
+                    missingSteamIDPlaceholder
                 }
             }
-            .sheet(isPresented: $isShowingSteamAPIKeyPortal) {
-                SafariView(url: Self.steamAPIKeyPortalURL)
-                    .ignoresSafeArea()
+            .tabItem {
+                Label("Inventory", systemImage: "shippingbox.fill")
             }
+            .tag(AppTab.inventory)
+
+            // TAB 3: Minimal Settings (Hides Debug Tools unless Developer Mode is ON)
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem {
+                Label("Settings", systemImage: "gearshape.fill")
+            }
+            .tag(AppTab.settings)
         }
+        .tint(AppTheme.Colors.csOrange)
         .preferredColorScheme(.dark)
     }
 
     // MARK: - Subviews
+
+    private var missingSteamIDPlaceholder: some View {
+        ZStack {
+            AppTheme.Colors.oledBlack
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Image(systemName: "person.badge.key.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(AppTheme.Colors.csOrange)
+
+                Text("STEAMID64 NOT CONFIGURED")
+                    .font(AppTheme.Fonts.headerTitle)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                Text("Please save your 17-digit SteamID64 in the Profile tab to fetch your public CS2 inventory.")
+                    .font(AppTheme.Fonts.bodyRegular)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                Button {
+                    selectedTab = .profile
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.left.circle.fill")
+                        Text("CONFIGURE STEAMID64")
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .buttonStyle(PrimaryActionButtonStyle(tint: AppTheme.Colors.csOrange))
+                .frame(maxWidth: 260)
+            }
+        }
+        .navigationTitle("CS2 Inventory")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 
     private var headerBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -211,25 +285,38 @@ public struct ContentView: View {
                     Spacer()
                 }
 
-                if sessionStore.hasStoredAPIKey {
-                    Button {
-                        Task {
-                            await sessionStore.syncProfileFromSteamWebAPI()
+                HStack(spacing: 10) {
+                    if sessionStore.hasStoredAPIKey {
+                        Button {
+                            Task {
+                                await sessionStore.syncProfileFromSteamWebAPI()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if sessionStore.isLoadingNetwork {
+                                    ProgressView()
+                                        .tint(AppTheme.Colors.textPrimary)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                }
+                                Text("SYNC PROFILE")
+                            }
+                            .frame(maxWidth: .infinity)
                         }
+                        .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.ctBlue))
+                        .disabled(sessionStore.isLoadingNetwork)
+                    }
+
+                    Button {
+                        selectedTab = .inventory
                     } label: {
                         HStack(spacing: 8) {
-                            if sessionStore.isLoadingNetwork {
-                                ProgressView()
-                                    .tint(AppTheme.Colors.textPrimary)
-                            } else {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                            }
-                            Text("SYNC PROFILE DIRECTLY FROM STEAM")
+                            Image(systemName: "shippingbox.fill")
+                            Text("OPEN INVENTORY")
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.ctBlue))
-                    .disabled(sessionStore.isLoadingNetwork)
+                    .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.csOrange))
                 }
             }
             .tacticalCard(accentBorder: AppTheme.Colors.ctBlue.opacity(0.5))
@@ -303,7 +390,6 @@ public struct ContentView: View {
                     .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.csOrange))
                 }
 
-                // Informational Banner / Tip
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "info.circle.fill")
                         .foregroundStyle(AppTheme.Colors.ctBlue)
@@ -325,7 +411,6 @@ public struct ContentView: View {
                 )
             }
 
-            // Real-time Feedback Banners
             if let statusMessage = sessionStore.statusMessage {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.shield.fill")
@@ -354,9 +439,12 @@ public struct ContentView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
-            // Save & Clear Actions
             VStack(spacing: 10) {
                 Button {
+                    DebugLogger.shared.info(
+                        "Saving credentials to Keychain for SteamID64: \(steamIDInput)",
+                        category: "Keychain"
+                    )
                     sessionStore.saveCredentials(steamID64: steamIDInput, webAPIKey: apiKeyInput)
                     apiKeyInput = ""
                 } label: {
@@ -369,6 +457,7 @@ public struct ContentView: View {
 
                 if sessionStore.storedSteamID64 != nil || sessionStore.hasStoredAPIKey {
                     Button {
+                        DebugLogger.shared.warning("Cleared stored credentials from Keychain.", category: "Keychain")
                         sessionStore.clearCredentials()
                         steamIDInput = ""
                         apiKeyInput = ""
