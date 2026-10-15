@@ -6,11 +6,18 @@ import SwiftUI
 public struct ProfileView: View {
     let sessionStore: SteamSessionStore
     let statsModel: StatsViewModel
+    let authSession: SteamAuthSession
     @Binding var selectedTab: AppTab
 
-    public init(sessionStore: SteamSessionStore, statsModel: StatsViewModel, selectedTab: Binding<AppTab>) {
+    public init(
+        sessionStore: SteamSessionStore,
+        statsModel: StatsViewModel,
+        authSession: SteamAuthSession,
+        selectedTab: Binding<AppTab>
+    ) {
         self.sessionStore = sessionStore
         self.statsModel = statsModel
+        self.authSession = authSession
         self._selectedTab = selectedTab
     }
 
@@ -171,6 +178,11 @@ public struct ProfileView: View {
             HStack(spacing: 12) {
                 connectionChip(title: "Steam", connected: sessionStore.storedSteamID64 != nil)
                 connectionChip(title: "FACEIT", connected: !AppCredentialsStore.readFaceitAPIKey().isEmpty)
+            }
+
+            HStack(spacing: 12) {
+                connectionChip(title: "Steam session", connected: authSession.isSignedIn)
+                connectionChip(title: "Game Coordinator", connected: authSession.isSignedIn)
             }
         }
         .tacticalCard()

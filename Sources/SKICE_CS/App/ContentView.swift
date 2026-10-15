@@ -4,6 +4,7 @@ public struct ContentView: View {
     @State private var selectedTab: AppTab = .profile
     @State private var sessionStore = SteamSessionStore()
     @State private var statsModel = StatsViewModel()
+    @State private var authSession = SteamAuthSession()
 
     public init() {}
 
@@ -11,7 +12,12 @@ public struct ContentView: View {
         TabView(selection: $selectedTab) {
             // TAB 1: Home dashboard
             NavigationStack {
-                ProfileView(sessionStore: sessionStore, statsModel: statsModel, selectedTab: $selectedTab)
+                ProfileView(
+                    sessionStore: sessionStore,
+                    statsModel: statsModel,
+                    authSession: authSession,
+                    selectedTab: $selectedTab
+                )
             }
             .tabItem {
                 Label("Home", systemImage: "house.fill")
@@ -46,7 +52,11 @@ public struct ContentView: View {
 
             // TAB 4: Settings
             NavigationStack {
-                SettingsView(sessionStore: sessionStore, statsModel: statsModel)
+                SettingsView(
+                    sessionStore: sessionStore,
+                    statsModel: statsModel,
+                    authSession: authSession
+                )
             }
             .tabItem {
                 Label("Settings", systemImage: "gearshape.fill")

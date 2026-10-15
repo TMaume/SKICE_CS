@@ -4,6 +4,7 @@ import UIKit
 public struct SettingsView: View {
     let sessionStore: SteamSessionStore
     let statsModel: StatsViewModel
+    let authSession: SteamAuthSession
 
     @AppStorage("isDeveloperModeEnabled") private var isDeveloperModeEnabled: Bool = false
     @State private var logger = DebugLogger.shared
@@ -23,9 +24,14 @@ public struct SettingsView: View {
 
     private static let steamAPIKeyPortalURL = URL(string: "https://steamcommunity.com/dev/apikey")!
 
-    public init(sessionStore: SteamSessionStore, statsModel: StatsViewModel) {
+    public init(
+        sessionStore: SteamSessionStore,
+        statsModel: StatsViewModel,
+        authSession: SteamAuthSession
+    ) {
         self.sessionStore = sessionStore
         self.statsModel = statsModel
+        self.authSession = authSession
     }
 
     private var isSteamIDValid: Bool? {
@@ -116,6 +122,7 @@ public struct SettingsView: View {
         VStack(spacing: 14) {
             sectionTitle("CONNECTIONS")
             steamCard
+            SteamAuthCard(authSession: authSession)
             faceitCard
         }
     }
