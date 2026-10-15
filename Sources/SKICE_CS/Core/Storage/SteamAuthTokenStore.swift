@@ -68,6 +68,36 @@ public struct SteamAuthTokenStore: Sendable {
         refreshToken != nil
     }
 
+    // MARK: - Remembered login (quick re-connect)
+
+    /// The account name remembered from the last password sign-in, if any.
+    public var rememberedAccountName: String? {
+        value(for: .steamRememberAccount)
+    }
+
+    /// The password remembered from the last password sign-in, if any.
+    public var rememberedPassword: String? {
+        value(for: .steamRememberPassword)
+    }
+
+    /// Saves (or, with an empty value, clears) the remembered login for quick
+    /// re-connect. Stored only in the Keychain.
+    public func saveRememberedCredentials(accountName: String, password: String) throws {
+        let account = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !account.isEmpty, !password.isEmpty else {
+            try clearRememberedCredentials()
+            return
+        }
+        try keychain.save(account, for: .steamRememberAccount)
+        try keychain.save(password, for: .steamRememberPassword)
+    }
+
+    /// Forgets the remembered login.
+    public func clearRememberedCredentials() throws {
+        try keychain.delete(for: .steamRememberAccount)
+        try keychain.delete(for: .steamRememberPassword)
+    }
+
     /// Expiry of the stored access token, read from its JWT payload.
     public var accessTokenExpiry: Date? {
         guard let raw = UserDefaults.standard.object(forKey: DefaultsKey.accessTokenExpiry) as? Double else {

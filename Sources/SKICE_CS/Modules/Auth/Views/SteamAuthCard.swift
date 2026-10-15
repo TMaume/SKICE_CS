@@ -32,6 +32,7 @@ public struct SteamAuthCard: View {
     @State private var passwordInput: String = ""
     @State private var isPasswordVisible: Bool = false
     @State private var guardCodeInput: String = ""
+    @State private var rememberPassword: Bool = true
 
     public init(authSession: SteamAuthSession) {
         self.authSession = authSession
@@ -77,8 +78,11 @@ public struct SteamAuthCard: View {
         }
         .tacticalCard(accentBorder: isConnected ? AppTheme.Colors.statusSuccess.opacity(0.4) : nil)
         .onAppear {
-            if accountNameInput.isEmpty, let stored = authSession.accountName {
-                accountNameInput = stored
+            if accountNameInput.isEmpty {
+                accountNameInput = authSession.rememberedAccountName ?? authSession.accountName ?? ""
+            }
+            if passwordInput.isEmpty {
+                passwordInput = authSession.rememberedPassword ?? ""
             }
         }
     }
@@ -229,7 +233,7 @@ public struct SteamAuthCard: View {
 
     private var passwordOption: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sign in with your Steam account name and password. Add your Steam Guard code now, or leave it blank and the app will ask for it after your password. The password is used once and never stored.")
+            Text("Sign in with your Steam account name and password. Add your Steam Guard code now, or leave it blank and the app will ask after. With 'Remember my password', it is saved in the iOS Keychain on this device only.")
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -285,12 +289,25 @@ public struct SteamAuthCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Toggle(isOn: $rememberPassword) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Remember my password on this device")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text("Saved in the iOS Keychain; used only to sign in to Steam.")
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+            }
+            .tint(AppTheme.Colors.csOrange)
+
             Button {
                 Task {
                     await authSession.signIn(
                         accountName: accountNameInput,
                         password: passwordInput,
-                        guardCode: guardCodeInput
+                        guardCode: guardCodeInput,
+                        rememberPassword: rememberPassword
                     )
                     passwordInput = ""
                     guardCodeInput = ""

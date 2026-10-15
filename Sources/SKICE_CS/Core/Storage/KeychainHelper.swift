@@ -10,6 +10,8 @@ public enum KeychainKey: String, CaseIterable, Sendable {
     case steamSessionSteamID = "com.skice.cs2.keychain.steamsessionsteamid"
     case steamAccountName = "com.skice.cs2.keychain.steamaccountname"
     case steamGuardData = "com.skice.cs2.keychain.steamguarddata"
+    case steamRememberAccount = "com.skice.cs2.keychain.steamrememberaccount"
+    case steamRememberPassword = "com.skice.cs2.keychain.steamrememberpassword"
     case faceitAPIKey = "com.skice.cs2.keychain.faceitapikey"
 }
 

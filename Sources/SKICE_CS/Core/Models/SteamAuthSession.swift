@@ -81,6 +81,12 @@ public final class SteamAuthSession {
         store.hasPersistedSession
     }
 
+    /// Remembered login account name (quick re-connect), from the Keychain.
+    public var rememberedAccountName: String? { store.rememberedAccountName }
+
+    /// Remembered login password (quick re-connect), from the Keychain.
+    public var rememberedPassword: String? { store.rememberedPassword }
+
     /// Human-readable summary of the session for UI and for other modules.
     public var stateSummary: String {
         switch state {
@@ -124,12 +130,27 @@ public final class SteamAuthSession {
         accountName: String,
         password: String,
         guardCode: String? = nil,
+        rememberPassword: Bool = false,
         platformType: SteamTokenPlatformType = .steamClient
     ) async {
         let account = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !account.isEmpty, !password.isEmpty else {
             fail(with: "Enter both your Steam account name and password.")
             return
+        }
+
+        // Persist or clear the remembered login for quick re-connect.
+        do {
+            if rememberPassword {
+                try store.saveRememberedCredentials(accountName: account, password: password)
+            } else {
+                try store.clearRememberedCredentials()
+            }
+        } catch {
+            DebugLogger.shared.warning(
+                "SteamAuth could not update remembered credentials: " + error.localizedDescription,
+                category: "SteamAuth"
+            )
         }
 
         cancelPolling()
