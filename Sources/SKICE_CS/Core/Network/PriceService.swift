@@ -140,6 +140,9 @@ public struct PriceService: Sendable {
         // table rather than stamping a fresh-but-empty cache.
         guard !fetched.isEmpty else { return cached }
 
+        // Persist a rolling history snapshot for every freshly priced item.
+        PriceHistoryStore.shared.record(fetched)
+
         var merged = cached.entries
         for (hash, entry) in fetched { merged[hash] = entry }
         let updated = PriceTable(entries: merged, fetchedAt: Date())

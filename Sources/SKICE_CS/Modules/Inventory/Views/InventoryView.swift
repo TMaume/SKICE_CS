@@ -680,6 +680,8 @@ private struct SkinDetailSheet: View {
                             .fill(Color(white: 0.1))
                     )
 
+                    PriceHistorySection(marketHashName: item.marketHashName)
+
                     Text("Steam Community Market prices in EUR — lowest listing and median sale price.")
                         .font(.system(size: 10))
                         .foregroundStyle(AppTheme.Colors.textSecondary)

@@ -145,7 +145,8 @@ public struct TradeUpCalculatorView: View {
                         TradeUpInputCard(
                             item: item,
                             isSelected: viewModel.isSelected(item),
-                            price: viewModel.inputPrice(for: item)
+                            price: viewModel.inputPrice(for: item),
+                            trend: viewModel.trend(for: item.marketHashName)
                         ) {
                             viewModel.toggleSelection(item)
                         }
@@ -169,7 +170,8 @@ public struct TradeUpCalculatorView: View {
             ForEach(viewModel.outcomes) { outcome in
                 TradeUpOutcomeRow(
                     outcome: outcome,
-                    price: viewModel.outcomePrices[outcome.marketHashName]
+                    price: viewModel.outcomePrices[outcome.marketHashName],
+                    trend: viewModel.trend(for: outcome.marketHashName)
                 )
             }
         }
@@ -287,6 +289,7 @@ private struct TradeUpInputCard: View {
     let item: SkinItem
     let isSelected: Bool
     let price: PriceEntry?
+    let trend: PriceTrend?
     let onTap: () -> Void
 
     private var rarityColor: Color {
@@ -378,6 +381,8 @@ private struct TradeUpInputCard: View {
                         .font(.system(size: 8, weight: .bold))
                     Text(priceText)
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    Spacer()
+                    PriceTrendBadge(trend: trend)
                 }
                 .foregroundStyle(price == nil ? AppTheme.Colors.textSecondary : AppTheme.Colors.statusSuccess)
             }
@@ -404,6 +409,7 @@ private struct TradeUpInputCard: View {
 private struct TradeUpOutcomeRow: View {
     let outcome: TradeUpOutcome
     let price: PriceEntry?
+    let trend: PriceTrend?
 
     private var rarityColor: Color {
         AppTheme.rarityColor(for: outcome.item.rarity)
@@ -459,6 +465,7 @@ private struct TradeUpOutcomeRow: View {
                 Text(priceText)
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundStyle(price == nil ? AppTheme.Colors.textSecondary : .white)
+                PriceTrendBadge(trend: trend)
             }
         }
         .padding(10)

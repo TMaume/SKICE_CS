@@ -35,15 +35,20 @@ public final class TradeUpCalculatorViewModel {
 
     private let inputPriceStore: PriceStore
     private let priceService: PriceService
+    private let historyStore: PriceHistoryStore
+    /// In-memory cache of the on-disk history series, loaded lazily.
+    private var cachedSeries: [String: [PriceEntry]]?
 
     public init(
         inventory: [SkinItem],
         inputPriceStore: PriceStore,
-        priceService: PriceService = .shared
+        priceService: PriceService = .shared,
+        historyStore: PriceHistoryStore = .shared
     ) {
         self.eligibleItems = inventory.filter { TradeUpEngine.isEligible($0) }
         self.inputPriceStore = inputPriceStore
         self.priceService = priceService
+        self.historyStore = historyStore
         if let first = self.availableRarities.first {
             self.selectedRarity = first
         }
@@ -143,6 +148,7 @@ public final class TradeUpCalculatorViewModel {
                 }
             }
             outcomePrices = dict
+            cachedSeries = nil
         } catch {
             // Leave outcomePrices empty — valuation becomes unavailable but outcomes remain.
         }
@@ -151,6 +157,17 @@ public final class TradeUpCalculatorViewModel {
     /// Steam Market price for an eligible input item (median ?? lowest), if priced.
     public func inputPrice(for item: SkinItem) -> PriceEntry? {
         inputPriceStore.entry(for: item)
+    }
+
+    /// Recent local price trend for a market hash, defaulting to 7 days.
+    /// Reads the on-disk history once and caches it for the screen's lifetime.
+    public func trend(for marketHashName: String, days: Int = 7) -> PriceTrend? {
+        let series = cachedSeries ?? {
+            let loaded = historyStore.series()
+            cachedSeries = loaded
+            return loaded
+        }()
+        return PriceHistoryStore.trend(from: series[marketHashName] ?? [], days: days)
     }
 
     // MARK: - Valuation
