@@ -387,7 +387,9 @@ public struct SteamAuthClient: Sendable {
     // MARK: - Transport
 
     private func endpointURL(method: String) throws -> URL {
-        guard let url = URL(string: Self.baseURLString + "/IAuthenticationService/" + method + "/v1/") else {
+        // format=json is required: with a protobuf request body Steam would
+        // otherwise answer with a binary protobuf payload (application/octet-stream).
+        guard let url = URL(string: Self.baseURLString + "/IAuthenticationService/" + method + "/v1/?format=json") else {
             throw SteamAuthError.malformedResponse("could not build the endpoint URL for " + method)
         }
         return url

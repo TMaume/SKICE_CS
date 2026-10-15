@@ -16,12 +16,21 @@ private func makeQRImage(from string: String) -> UIImage? {
     return UIImage(cgImage: cgImage)
 }
 
-/// Tier 3 entry point in Settings: sign in to a real Steam session by scanning
-/// a QR code with the Steam mobile app. No password is handled on-device, and
-/// the resulting tokens live in the Keychain.
+/// Tier 3 entry point in Settings: sign in to a real Steam session, either by
+/// scanning a QR code with the Steam mobile app or by entering a password.
+/// Everything stays on-device; tokens live in the Keychain.
 public struct SteamAuthCard: View {
     let authSession: SteamAuthSession
 
+    private enum SignInMode: String, CaseIterable {
+        case qr = "QR CODE"
+        case password = "PASSWORD"
+    }
+
+    @State private var signInMode: SignInMode = .qr
+    @State private var accountNameInput: String = ""
+    @State private var passwordInput: String = ""
+    @State private var isPasswordVisible: Bool = false
     @State private var guardCodeInput: String = ""
 
     public init(authSession: SteamAuthSession) {
@@ -51,6 +60,11 @@ public struct SteamAuthCard: View {
             }
         }
         .tacticalCard(accentBorder: isConnected ? AppTheme.Colors.statusSuccess.opacity(0.4) : nil)
+        .onAppear {
+            if accountNameInput.isEmpty, let stored = authSession.accountName {
+                accountNameInput = stored
+            }
+        }
     }
 
     // MARK: - Header
@@ -91,11 +105,11 @@ public struct SteamAuthCard: View {
         case .authenticating:
             busySection(label: "Contacting Steam…")
         case .awaitingRemoteApproval:
-            qrApprovalSection
+            remoteApprovalSection
         case .awaitingGuardCode:
             guardCodeSection
         case .signedOut, .expired, .failed:
-            qrSignInSection
+            signInSection
         }
     }
 
@@ -139,12 +153,9 @@ public struct SteamAuthCard: View {
         }
     }
 
-    private var qrSignInSection: some View {
+    private var signInSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sign in by scanning a QR code with the Steam mobile app. Your Steam password is never typed into this app.")
-                .font(AppTheme.Fonts.bodyRegular)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            localOnlyNote
 
             if authSession.state == .expired, authSession.hasPersistedRefreshToken {
                 Button {
@@ -158,6 +169,29 @@ public struct SteamAuthCard: View {
                 }
                 .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.ctBlue))
             }
+
+            Picker("Sign-in method", selection: $signInMode) {
+                ForEach(SignInMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            switch signInMode {
+            case .qr:
+                qrOption
+            case .password:
+                passwordOption
+            }
+        }
+    }
+
+    private var qrOption: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Scan a QR code with the Steam mobile app. Your password is never typed into this app.")
+                .font(AppTheme.Fonts.bodyRegular)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Button {
                 Task { await authSession.signInViaQR() }
@@ -177,7 +211,92 @@ public struct SteamAuthCard: View {
         }
     }
 
-    private var qrApprovalSection: some View {
+    private var passwordOption: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Sign in with your Steam account name and password. The password is used once to obtain tokens and is never stored.")
+                .font(AppTheme.Fonts.bodyRegular)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("STEAM ACCOUNT NAME")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                TextField("account name", text: $accountNameInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .tacticalTextField()
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("PASSWORD")
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                    Spacer()
+                    Button {
+                        isPasswordVisible.toggle()
+                    } label: {
+                        Text(isPasswordVisible ? "HIDE" : "SHOW")
+                            .font(AppTheme.Fonts.captionMono)
+                            .foregroundStyle(AppTheme.Colors.ctBlue)
+                    }
+                }
+
+                Group {
+                    if isPasswordVisible {
+                        TextField("Steam password", text: $passwordInput)
+                    } else {
+                        SecureField("Steam password", text: $passwordInput)
+                    }
+                }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .tacticalTextField()
+            }
+
+            Button {
+                Task {
+                    await authSession.signIn(accountName: accountNameInput, password: passwordInput)
+                    passwordInput = ""
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if authSession.isBusy {
+                        ProgressView().tint(AppTheme.Colors.textPrimary)
+                    } else {
+                        Image(systemName: "lock.open.fill")
+                    }
+                    Text("SIGN IN WITH PASSWORD")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PrimaryActionButtonStyle(tint: AppTheme.Colors.csOrange))
+            .disabled(authSession.isBusy)
+        }
+    }
+
+    private var localOnlyNote: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "lock.shield.fill")
+                .foregroundStyle(AppTheme.Colors.statusSuccess)
+                .padding(.top, 1)
+            Text("Everything stays on this device. Credentials and tokens are sent only to Steam and stored in the iOS Keychain — no relay, no cloud.")
+                .font(AppTheme.Fonts.captionMono)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.Colors.statusSuccess.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(AppTheme.Colors.statusSuccess.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private var remoteApprovalSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let url = authSession.pendingQRURL {
                 if let qrImage = makeQRImage(from: url) {
@@ -197,7 +316,9 @@ public struct SteamAuthCard: View {
                     .foregroundStyle(AppTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                busySection(label: "Preparing the QR code…")
+                Text("Approve this sign-in in the Steam mobile app.")
+                    .font(AppTheme.Fonts.bodyRegular)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
             }
 
             HStack(spacing: 10) {
