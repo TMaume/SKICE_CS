@@ -54,14 +54,6 @@ public struct InventoryView: View {
                 }
 
                 Button {
-                    isShowingTradeUpCalculator = true
-                } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .foregroundStyle(AppTheme.Colors.csOrange)
-                }
-                .accessibilityLabel("Open Trade-Up Calculator")
-
-                Button {
                     withAnimation(.snappy(duration: 0.2)) {
                         isGridView.toggle()
                     }
@@ -168,6 +160,47 @@ public struct InventoryView: View {
         )
     }
 
+    /// Entry point to the Trade-Up Contract calculator, placed directly under
+    /// the inventory summary so it reads as part of the same header group.
+    private var tradeUpButton: some View {
+        Button {
+            isShowingTradeUpCalculator = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.csOrange)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Trade-Up Contract")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Simulate EV / ROI in EUR")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(white: 0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(AppTheme.Colors.csOrange.opacity(0.35), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open Trade-Up Calculator")
+    }
+
     @ViewBuilder
     private var contentArea: some View {
         if viewModel.isLoading && viewModel.items.isEmpty {
@@ -205,6 +238,7 @@ public struct InventoryView: View {
                 VStack(spacing: 12) {
                     if !viewModel.items.isEmpty {
                         compactSummaryBar
+                        tradeUpButton
                     }
 
                     if isGridView {
