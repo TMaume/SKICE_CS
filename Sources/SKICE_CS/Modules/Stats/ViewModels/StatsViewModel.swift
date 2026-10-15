@@ -18,9 +18,6 @@ public final class StatsViewModel {
     public var customStartDate: Date = Date.now.addingTimeInterval(-7 * 86_400)
     public var customEndDate: Date = .now
 
-    public var faceitIdentifierInput: String = ""
-    public var faceitAPIKeyInput: String = ""
-    public var isShowingFaceitConfigSheet: Bool = false
     public var selectedMapForSheet: SteamMapStatSummary?
 
     // MARK: - Dependencies & Cache
@@ -40,8 +37,6 @@ public final class StatsViewModel {
         self.steamService = steamService
         self.faceitService = faceitService
         self.snapshotStore = snapshotStore
-        self.faceitIdentifierInput = StatsCredentialsStore.readFaceitIdentifier()
-        self.faceitAPIKeyInput = StatsCredentialsStore.readFaceitAPIKey()
         loadCachedStats()
     }
 
@@ -82,10 +77,10 @@ public final class StatsViewModel {
         guard selectedTimeFrame != .allTime else { return nil }
         if let diff = currentDiffResult {
             if diff.isDeltaActive, let refDate = diff.referenceDate {
-                return "Showing delta since \(refDate.formatted(date: .abbreviated, time: .omitted))"
+                return "Since \(refDate.formatted(date: .abbreviated, time: .omitted))"
             } else {
                 let sinceDate = diff.earliestSnapshotDate ?? overviewStats?.lastUpdated ?? .now
-                return "Collecting history since \(sinceDate.formatted(date: .abbreviated, time: .omitted))"
+                return "Tracking since \(sinceDate.formatted(date: .abbreviated, time: .omitted))"
             }
         }
         return nil
@@ -123,15 +118,12 @@ public final class StatsViewModel {
         if let explicit = explicitSteamID64?.trimmingCharacters(in: .whitespacesAndNewlines), !explicit.isEmpty {
             resolvedSteamID = explicit
         } else {
-            resolvedSteamID = StatsCredentialsStore.readSteamID64()
+            resolvedSteamID = AppCredentialsStore.readSteamID64()
         }
 
-        let steamKey = StatsCredentialsStore.readSteamWebAPIKey()
-        let faceitId = faceitIdentifierInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        let faceitKey = faceitAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        StatsCredentialsStore.saveFaceitIdentifier(faceitId)
-        StatsCredentialsStore.saveFaceitAPIKey(faceitKey)
+        let steamKey = AppCredentialsStore.readSteamWebAPIKey()
+        let faceitId = AppCredentialsStore.readFaceitIdentifier().trimmingCharacters(in: .whitespacesAndNewlines)
+        let faceitKey = AppCredentialsStore.readFaceitAPIKey().trimmingCharacters(in: .whitespacesAndNewlines)
 
         async let steamResult = fetchSteamSafely(steamID64: resolvedSteamID, apiKey: steamKey)
         async let faceitResult = fetchFaceitSafely(
@@ -165,13 +157,6 @@ public final class StatsViewModel {
 
         isLoading = false
         isRefreshing = false
-    }
-
-    public func saveFaceitConfigurationAndRefresh(explicitSteamID64: String? = nil) async {
-        StatsCredentialsStore.saveFaceitIdentifier(faceitIdentifierInput)
-        StatsCredentialsStore.saveFaceitAPIKey(faceitAPIKeyInput)
-        isShowingFaceitConfigSheet = false
-        await refreshStats(explicitSteamID64: explicitSteamID64)
     }
 
     public func clearStatsCache() {
@@ -225,9 +210,8 @@ public final class StatsViewModel {
                 fallbackSteamID64: fallbackSteamID64,
                 apiKey: apiKey
             )
-            if faceitIdentifierInput.isEmpty {
-                faceitIdentifierInput = stats.nickname
-                StatsCredentialsStore.saveFaceitIdentifier(stats.nickname)
+            if AppCredentialsStore.readFaceitIdentifier().isEmpty {
+                AppCredentialsStore.saveFaceitIdentifier(stats.nickname)
             }
             return stats
         } catch {

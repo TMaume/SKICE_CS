@@ -651,9 +651,16 @@ private struct SkinListRow: View {
 private struct SkinDetailSheet: View {
     let item: SkinItem
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("isDeveloperModeEnabled") private var isDeveloperModeEnabled: Bool = false
+    @State private var isShowingMarketSheet: Bool = false
 
     private var rarityColor: Color {
         AppTheme.rarityColor(for: item.rarity, hexOverride: item.rarityColorHex)
+    }
+
+    private var marketURL: URL? {
+        let hash = item.marketHashName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        return URL(string: "https://steamcommunity.com/market/listings/730/\(hash)")
     }
 
     var body: some View {
@@ -697,6 +704,8 @@ private struct SkinDetailSheet: View {
                         }
                     }
 
+                    WearTierBar(exterior: item.exterior)
+
                     VStack(spacing: 12) {
                         detailRow(label: "Rarity", value: item.rarityLocalizedName, valueColor: rarityColor)
                         detailRow(
@@ -710,17 +719,30 @@ private struct SkinDetailSheet: View {
                             value: item.tradeStatus.detailedDescription,
                             valueColor: AppTheme.tradeStatusColor(for: item.tradeStatus)
                         )
-                        detailRow(
-                            label: "Community Market",
-                            value: item.isMarketable ? "Marketable" : "Not Marketable",
-                            valueColor: item.isMarketable ? .green : .secondary
-                        )
-                        detailRow(label: "Asset ID", value: item.assetId, isMonospaced: true)
-                        detailRow(
-                            label: "GC Inspect Link",
-                            value: item.inspectLink != nil ? "Ready for Float Extraction" : "Unavailable",
-                            valueColor: item.inspectLink != nil ? .green : .secondary
-                        )
+
+                        Button {
+                            isShowingMarketSheet = true
+                        } label: {
+                            HStack(alignment: .top) {
+                                Text("Community Market")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    Text(item.isMarketable ? "Marketable" : "Not Marketable")
+                                        .font(.subheadline.weight(.semibold))
+                                    Image(systemName: "arrow.up.right.square")
+                                        .font(.caption.weight(.bold))
+                                }
+                                .foregroundStyle(item.isMarketable ? AppTheme.Colors.statusSuccess : AppTheme.Colors.textSecondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(marketURL == nil)
+
+                        if isDeveloperModeEnabled {
+                            detailRow(label: "Asset ID", value: item.assetId, isMonospaced: true)
+                        }
                     }
                     .padding(16)
                     .background(
@@ -742,6 +764,12 @@ private struct SkinDetailSheet: View {
                 }
             }
         }
+        .sheet(isPresented: $isShowingMarketSheet) {
+            if let url = marketURL {
+                SafariView(url: url)
+                    .ignoresSafeArea()
+            }
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -760,6 +788,42 @@ private struct SkinDetailSheet: View {
                 .font(isMonospaced ? .footnote.monospaced() : .subheadline.weight(.semibold))
                 .foregroundStyle(valueColor)
                 .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+// MARK: - Wear Tier Bar (FN / MW / FT / WW / BS)
+
+private struct WearTierBar: View {
+    let exterior: SkinExterior
+
+    private static let order: [SkinExterior] = [
+        .factoryNew, .minimalWear, .fieldTested, .wellWorn, .battleScarred
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 2) {
+                ForEach(Self.order, id: \.rawValue) { tier in
+                    Rectangle()
+                        .fill(
+                            tier == exterior
+                                ? AppTheme.exteriorColor(for: tier)
+                                : AppTheme.exteriorColor(for: tier).opacity(0.22)
+                        )
+                }
+            }
+            .frame(height: 8)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            HStack(spacing: 0) {
+                ForEach(Self.order, id: \.rawValue) { tier in
+                    Text(tier.shortCode ?? "")
+                        .font(.system(size: 9, weight: tier == exterior ? .bold : .regular, design: .monospaced))
+                        .foregroundStyle(tier == exterior ? AppTheme.exteriorColor(for: tier) : AppTheme.Colors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
         }
     }
 }

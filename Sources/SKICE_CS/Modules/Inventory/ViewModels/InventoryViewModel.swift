@@ -34,13 +34,13 @@ public final class InventoryViewModel {
 
     // MARK: - Search & Filter Controls
 
-    public var searchText: String = ""
-    public var selectedCategory: String = "All"
-    public var selectedRarity: SkinRarity?
-    public var selectedExterior: SkinExterior?
-    public var onlyStatTrak: Bool = false
-    public var tradeFilter: InventoryTradeFilter = .all
-    public var sortOption: InventorySortOption = .rarityDescending
+    public var searchText: String = "" { didSet { recomputeDerivedState() } }
+    public var selectedCategory: String = "All" { didSet { recomputeDerivedState() } }
+    public var selectedRarity: SkinRarity? { didSet { recomputeDerivedState() } }
+    public var selectedExterior: SkinExterior? { didSet { recomputeDerivedState() } }
+    public var onlyStatTrak: Bool = false { didSet { recomputeDerivedState() } }
+    public var tradeFilter: InventoryTradeFilter = .all { didSet { recomputeDerivedState() } }
+    public var sortOption: InventorySortOption = .rarityDescending { didSet { recomputeDerivedState() } }
 
     // MARK: - Dependencies
 
@@ -50,16 +50,36 @@ public final class InventoryViewModel {
         self.service = service
     }
 
-    // MARK: - Computed Properties
+    // MARK: - Cached Derived State
 
     /// Dynamic list of item categories present in the loaded inventory.
-    public var availableCategories: [String] {
-        let unique = Set(items.map(\.categoryType)).sorted()
-        return ["All"] + unique
-    }
+    public private(set) var availableCategories: [String] = ["All"]
 
     /// Filtered and sorted items matching the active search query and filter pills.
-    public var filteredItems: [SkinItem] {
+    /// Recomputed once per mutation, not on every body evaluation.
+    public private(set) var filteredItems: [SkinItem] = []
+
+    public private(set) var tradableItemsCount: Int = 0
+    public private(set) var cooldownItemsCount: Int = 0
+    public private(set) var untradableItemsCount: Int = 0
+    public private(set) var statTrakItemsCount: Int = 0
+
+    public var totalItemsCount: Int {
+        items.count
+    }
+
+    public var hasActiveFilters: Bool {
+        selectedCategory != "All"
+            || selectedRarity != nil
+            || selectedExterior != nil
+            || onlyStatTrak
+            || tradeFilter != .all
+            || !searchText.isEmpty
+    }
+
+    /// Recomputes the cached filtered list and counters. Called after any change
+    /// to \`items\`, search text, or a filter/sort control.
+    private func recomputeDerivedState() {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         let filtered = items.filter { item in
@@ -97,36 +117,15 @@ public final class InventoryViewModel {
             return true
         }
 
-        return sortItems(filtered, by: sortOption)
-    }
+        filteredItems = sortItems(filtered, by: sortOption)
 
-    public var totalItemsCount: Int {
-        items.count
-    }
+        tradableItemsCount = items.filter(\.isTradable).count
+        cooldownItemsCount = items.filter(\.isOnTradeCooldown).count
+        untradableItemsCount = items.filter(\.isPermanentlyUntradable).count
+        statTrakItemsCount = items.filter(\.isStatTrak).count
 
-    public var tradableItemsCount: Int {
-        items.filter(\.isTradable).count
-    }
-
-    public var cooldownItemsCount: Int {
-        items.filter(\.isOnTradeCooldown).count
-    }
-
-    public var untradableItemsCount: Int {
-        items.filter(\.isPermanentlyUntradable).count
-    }
-
-    public var statTrakItemsCount: Int {
-        items.filter(\.isStatTrak).count
-    }
-
-    public var hasActiveFilters: Bool {
-        selectedCategory != "All"
-            || selectedRarity != nil
-            || selectedExterior != nil
-            || onlyStatTrak
-            || tradeFilter != .all
-            || !searchText.isEmpty
+        let unique = Set(items.map(\.categoryType)).sorted()
+        availableCategories = ["All"] + unique
     }
 
     // MARK: - Actions
@@ -150,6 +149,7 @@ public final class InventoryViewModel {
             let fetchedItems = try await service.fetchInventory(for: trimmed)
             self.items = fetchedItems
             self.lastLoadedSteamID = trimmed
+            recomputeDerivedState()
         } catch let inventoryError as SteamInventoryError {
             self.currentError = inventoryError
         } catch {

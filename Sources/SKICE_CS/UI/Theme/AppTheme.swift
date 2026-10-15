@@ -57,6 +57,25 @@ public enum AppTheme {
         public static let metricMono = Font.system(size: 14, weight: .semibold, design: .monospaced)
         public static let captionMono = Font.system(size: 11, weight: .regular, design: .monospaced)
     }
+
+    // MARK: - FACEIT Level Colors
+
+    public static func faceitLevelColor(_ level: Int) -> Color {
+        switch level {
+        case 1:
+            return Color(white: 0.78)
+        case 2, 3:
+            return Color(red: 0.18, green: 0.82, blue: 0.48)
+        case 4, 5, 6, 7:
+            return Color(red: 0.98, green: 0.78, blue: 0.18)
+        case 8, 9:
+            return Color(red: 1.00, green: 0.45, blue: 0.10)
+        case 10:
+            return Color(red: 0.94, green: 0.18, blue: 0.22)
+        default:
+            return Color.gray
+        }
+    }
 }
 
 // MARK: - Reusable View Modifiers & Button Styles

@@ -12,11 +12,11 @@ public struct MapDetailView: View {
     private var statusBadgeColor: Color {
         switch mapStat.victoryStatus {
         case .dominant, .positive:
-            return AppTheme.statsPositiveGreen
+            return AppTheme.Colors.statusSuccess
         case .balanced:
             return AppTheme.Colors.csOrange
         case .challenging:
-            return AppTheme.statsDangerRed
+            return AppTheme.Colors.statusDanger
         case .unplayed:
             return .secondary
         }
@@ -70,7 +70,7 @@ public struct MapDetailView: View {
                     LinearGradient(
                         colors: [
                             statusBadgeColor.opacity(0.24),
-                            AppTheme.statsCardSurface,
+                            AppTheme.Colors.gunmetalGray,
                             AppTheme.Colors.oledBlack
                         ],
                         startPoint: .topLeading,
@@ -147,7 +147,7 @@ public struct MapDetailView: View {
                             title: "ROUNDS WON",
                             value: mapStat.roundsWon.formatted(),
                             subtitle: "\(mapStat.roundsLost.formatted()) Lost",
-                            color: AppTheme.statsPositiveGreen
+                            color: AppTheme.Colors.statusSuccess
                         )
 
                         metricColumnCard(
@@ -172,7 +172,7 @@ public struct MapDetailView: View {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(AppTheme.statsDangerRed.opacity(0.35))
+                                    .fill(AppTheme.Colors.statusDanger.opacity(0.35))
                                     .frame(height: 8)
 
                                 Capsule()
@@ -184,10 +184,10 @@ public struct MapDetailView: View {
                     }
                 }
                 .padding(16)
-                .background(AppTheme.statsCardSurface)
+                .background(AppTheme.Colors.gunmetalGray)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                        .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             } else {
@@ -200,7 +200,7 @@ public struct MapDetailView: View {
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.statsCardSurface)
+                .background(AppTheme.Colors.gunmetalGray)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         }
@@ -251,15 +251,15 @@ public struct MapDetailView: View {
                         title: "CT-SIDE WIN %",
                         value: String(format: "%.1f%%", ctRate),
                         subtitle: "Counter-Terrorist Side",
-                        color: AppTheme.statsAccentBlue
+                        color: AppTheme.Colors.ctBlue
                     )
                 }
             }
             .padding(16)
-            .background(AppTheme.statsCardSurface)
+            .background(AppTheme.Colors.gunmetalGray)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                    .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
@@ -269,7 +269,7 @@ public struct MapDetailView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "checkmark.shield.fill")
                 .font(.title3)
-                .foregroundStyle(AppTheme.statsAccentBlue)
+                .foregroundStyle(AppTheme.Colors.ctBlue)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Verified Valve Schema Telemetry")
@@ -282,10 +282,10 @@ public struct MapDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.statsCardSurface)
+        .background(AppTheme.Colors.gunmetalGray)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }

@@ -43,7 +43,7 @@ public protocol SteamInventoryServicing: Sendable {
 
 /// Direct-to-API client querying `steamcommunity.com/inventory/<steamid64>/730/2`.
 public struct SteamInventoryService: SteamInventoryServicing {
-    private let session: URLSession
+    private let client: APIClient
     private let appID: Int = 730
     private let contextID: Int = 2
     /// Steam rejects `count > 2000` with HTTP 400. `1000` is the safest page size.
@@ -51,7 +51,7 @@ public struct SteamInventoryService: SteamInventoryServicing {
     private let maxPages: Int = 5
 
     public init(session: URLSession = .shared) {
-        self.session = session
+        self.client = APIClient(session: session)
     }
 
     public func fetchInventory(for steamID64: String) async throws -> [SkinItem] {
@@ -226,18 +226,10 @@ public struct SteamInventoryService: SteamInventoryServicing {
             rawPayload: "Headers -> \(headersSummary)"
         )
 
-        let data: Data
-        let urlResponse: URLResponse
-
+        let apiResponse: APIResponse
         do {
-            (data, urlResponse) = try await session.data(for: request)
-        } catch let urlError as URLError {
-            DebugLogger.shared.error(
-                "URLError (\(urlError.code.rawValue)): \(urlError.localizedDescription)",
-                category: "HTTP Err"
-            )
-            throw SteamInventoryError.networkFailure(urlError.localizedDescription)
-        } catch {
+            apiResponse = try await client.send(request)
+        } catch let error as APIClientError {
             DebugLogger.shared.error(
                 "Transport Error: \(error.localizedDescription)",
                 category: "HTTP Err"
@@ -245,13 +237,9 @@ public struct SteamInventoryService: SteamInventoryServicing {
             throw SteamInventoryError.networkFailure(error.localizedDescription)
         }
 
-        guard let httpResponse = urlResponse as? HTTPURLResponse else {
-            DebugLogger.shared.error("Response was not an HTTPURLResponse.", category: "HTTP Err")
-            throw SteamInventoryError.networkFailure("Invalid HTTP response.")
-        }
-
+        let data = apiResponse.data
         let rawBodyString = String(data: data, encoding: .utf8) ?? "<\(data.count) bytes binary>"
-        let statusCode = httpResponse.statusCode
+        let statusCode = apiResponse.statusCode
 
         if statusCode == 200 {
             DebugLogger.shared.info(
@@ -285,8 +273,7 @@ public struct SteamInventoryService: SteamInventoryServicing {
         case 404:
             throw SteamInventoryError.profileNotFound
         case 429:
-            let retryHeader = httpResponse.value(forHTTPHeaderField: "Retry-After")
-            let retrySeconds = retryHeader.flatMap { Int($0) }
+            let retrySeconds = apiResponse.headers["Retry-After"].flatMap { Int($0) }
             throw SteamInventoryError.rateLimited(retryAfterSeconds: retrySeconds)
         case 500...599:
             throw SteamInventoryError.serverError(statusCode: statusCode)

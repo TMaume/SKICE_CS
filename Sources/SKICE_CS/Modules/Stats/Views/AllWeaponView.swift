@@ -100,13 +100,13 @@ public struct AllWeaponsView: View {
                             .background(
                                 isSelected
                                     ? AppTheme.Colors.csOrange
-                                    : AppTheme.statsCardSurface
+                                    : AppTheme.Colors.gunmetalGray
                             )
                             .foregroundStyle(isSelected ? .black : .white)
                             .overlay(
                                 Capsule()
                                     .stroke(
-                                        isSelected ? Color.clear : AppTheme.statsCardBorder,
+                                        isSelected ? Color.clear : AppTheme.Colors.borderSubtle,
                                         lineWidth: 1
                                     )
                             )
@@ -125,7 +125,7 @@ public struct AllWeaponsView: View {
         let ratio = min(max(Double(weapon.kills) / Double(maxKillsInSelection), 0.03), 1.0)
         let factionBadgeColor: Color = weapon.faction == .terrorist
             ? AppTheme.Colors.csOrange
-            : (weapon.faction == .counterTerrorist ? AppTheme.statsAccentBlue : .secondary)
+            : (weapon.faction == .counterTerrorist ? AppTheme.Colors.ctBlue : .secondary)
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
@@ -194,7 +194,7 @@ public struct AllWeaponsView: View {
                 weaponMetricPill(
                     label: "Accuracy",
                     value: String(format: "%.1f%%", weapon.accuracyPercentage),
-                    color: AppTheme.statsAccentBlue
+                    color: AppTheme.Colors.ctBlue
                 )
 
                 Divider()
@@ -204,7 +204,7 @@ public struct AllWeaponsView: View {
                 weaponMetricPill(
                     label: "Est. HS %",
                     value: String(format: "%.1f%%", weapon.headshotPercentage),
-                    color: AppTheme.statsPositiveGreen
+                    color: AppTheme.Colors.statusSuccess
                 )
 
                 Divider()
@@ -220,10 +220,10 @@ public struct AllWeaponsView: View {
             .padding(.top, 2)
         }
         .padding(14)
-        .background(AppTheme.statsCardSurface)
+        .background(AppTheme.Colors.gunmetalGray)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }

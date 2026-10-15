@@ -38,12 +38,12 @@ public enum FaceitStatsError: LocalizedError, Equatable, Sendable {
 public actor FaceitStatsService {
     public static let shared = FaceitStatsService()
 
-    private let session: URLSession
+    private let client: APIClient
     private let baseURL = "https://open.faceit.com/data/v4"
     private let tag = "FaceitStatsService"
 
     public init(session: URLSession = .shared) {
-        self.session = session
+        self.client = APIClient(session: session)
     }
 
     public func fetchPlayerStats(
@@ -281,13 +281,10 @@ public actor FaceitStatsService {
             DebugLogger.shared.logStatsNetworkRequest(request, tag: serviceTag)
         }
 
-        let startTime = ContinuousClock.now
-        let data: Data
-        let response: URLResponse
-
+        let apiResponse: APIResponse
         do {
-            (data, response) = try await session.data(for: request)
-        } catch {
+            apiResponse = try await client.send(request)
+        } catch let error as APIClientError {
             let errText = error.localizedDescription
             await MainActor.run {
                 DebugLogger.shared.logStatsError(errText, tag: serviceTag)
@@ -295,13 +292,9 @@ public actor FaceitStatsService {
             throw FaceitStatsError.networkFailure(errText)
         }
 
-        let elapsedMs = Int(startTime.duration(to: .now).components.attoseconds / 1_000_000_000_000_000)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw FaceitStatsError.networkFailure("Invalid HTTP response")
-        }
-
-        let statusCode = httpResponse.statusCode
-        let byteCount = data.count
+        let statusCode = apiResponse.statusCode
+        let byteCount = apiResponse.data.count
+        let elapsedMs = apiResponse.durationMs
 
         await MainActor.run {
             DebugLogger.shared.logStatsNetworkResponse(
@@ -327,7 +320,7 @@ public actor FaceitStatsService {
         }
 
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            return try JSONDecoder().decode(T.self, from: apiResponse.data)
         } catch {
             let errText = error.localizedDescription
             await MainActor.run {

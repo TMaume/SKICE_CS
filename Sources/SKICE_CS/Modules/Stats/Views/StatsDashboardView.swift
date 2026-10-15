@@ -2,15 +2,22 @@ import SwiftUI
 
 public struct StatsDashboardView: View {
     public let steamID64: String?
-    @State private var viewModel = StatsViewModel()
+    @State private var viewModel: StatsViewModel
+    @Binding var selectedTab: AppTab
 
     private let metricGridColumns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
 
-    public init(steamID64: String? = nil) {
+    public init(
+        steamID64: String? = nil,
+        viewModel: StatsViewModel,
+        selectedTab: Binding<AppTab>
+    ) {
         self.steamID64 = steamID64
+        self._viewModel = State(initialValue: viewModel)
+        self._selectedTab = selectedTab
     }
 
     public var body: some View {
@@ -77,12 +84,12 @@ public struct StatsDashboardView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
                     Button {
-                        viewModel.isShowingFaceitConfigSheet = true
+                        selectedTab = .settings
                     } label: {
                         Image(systemName: "slider.horizontal.3")
                             .foregroundStyle(AppTheme.Colors.csOrange)
                     }
-                    .accessibilityLabel("Configure FACEIT")
+                    .accessibilityLabel("Open Settings")
 
                     Button {
                         Task {
@@ -101,9 +108,6 @@ public struct StatsDashboardView: View {
                     .accessibilityLabel("Refresh Stats")
                 }
             }
-        }
-        .sheet(isPresented: $viewModel.isShowingFaceitConfigSheet) {
-            faceitConfigurationSheet
         }
         .sheet(item: $viewModel.selectedMapForSheet) { selectedMap in
             MapDetailView(mapStat: selectedMap)
@@ -125,15 +129,15 @@ public struct StatsDashboardView: View {
                 }
                 .pickerStyle(.segmented)
 
-                if viewModel.selectedFilter != .faceit {
-                    Picker("Faction", selection: $viewModel.selectedFaction) {
-                        ForEach(StatsFactionFilter.allCases) { faction in
-                            Text(faction.rawValue).tag(faction)
-                        }
+                Picker("Faction", selection: $viewModel.selectedFaction) {
+                    ForEach(StatsFactionFilter.allCases) { faction in
+                        Text(faction.rawValue).tag(faction)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 132)
                 }
+                .pickerStyle(.segmented)
+                .frame(width: 132)
+                .disabled(viewModel.selectedFilter == .faceit)
+                .opacity(viewModel.selectedFilter == .faceit ? 0.35 : 1.0)
             }
 
             timeFrameSelectorSection
@@ -160,13 +164,13 @@ public struct StatsDashboardView: View {
                                 .background(
                                     isSelected
                                         ? AppTheme.Colors.csOrange
-                                        : AppTheme.statsCardSurface
+                                        : AppTheme.Colors.gunmetalGray
                                 )
                                 .foregroundStyle(isSelected ? .black : .white)
                                 .overlay(
                                     Capsule()
                                         .stroke(
-                                            isSelected ? Color.clear : AppTheme.statsCardBorder,
+                                            isSelected ? Color.clear : AppTheme.Colors.borderSubtle,
                                             lineWidth: 1
                                         )
                                 )
@@ -175,6 +179,7 @@ public struct StatsDashboardView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(.trailing, 8)
             }
 
             if viewModel.selectedTimeFrame == .custom {
@@ -204,7 +209,7 @@ public struct StatsDashboardView: View {
                     Spacer()
                 }
                 .padding(10)
-                .background(AppTheme.statsCardSurface)
+                .background(AppTheme.Colors.gunmetalGray)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
@@ -212,14 +217,14 @@ public struct StatsDashboardView: View {
                 HStack(spacing: 6) {
                     Image(systemName: viewModel.isShowingDelta ? "chart.line.uptrend.xyaxis" : "clock.badge.checkmark")
                         .font(.caption2)
-                        .foregroundStyle(viewModel.isShowingDelta ? AppTheme.statsPositiveGreen : AppTheme.Colors.csOrange)
+                        .foregroundStyle(viewModel.isShowingDelta ? AppTheme.Colors.statusSuccess : AppTheme.Colors.csOrange)
 
                     Text(badgeText)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(viewModel.isShowingDelta ? AppTheme.statsPositiveGreen : .secondary)
+                        .foregroundStyle(viewModel.isShowingDelta ? AppTheme.Colors.statusSuccess : .secondary)
 
                     if !viewModel.isShowingDelta {
-                        Text("• Showing Cumulative Baseline")
+                        Text("• Showing all-time totals")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -228,10 +233,10 @@ public struct StatsDashboardView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(AppTheme.statsCardSurface.opacity(0.85))
+                .background(AppTheme.Colors.gunmetalGray.opacity(0.85))
                 .overlay(
                     Capsule()
-                        .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                        .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
                 )
                 .clipShape(Capsule())
             }
@@ -265,11 +270,11 @@ public struct StatsDashboardView: View {
             }
 
             Button {
-                viewModel.isShowingFaceitConfigSheet = true
+                selectedTab = .settings
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "gearshape.fill")
-                    Text("Configure in Settings")
+                    Text("Open Settings")
                         .fontWeight(.bold)
                 }
                 .font(.subheadline)
@@ -283,7 +288,7 @@ public struct StatsDashboardView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.statsCardSurface)
+        .background(AppTheme.Colors.gunmetalGray)
         .overlay(
             RoundedRectangle(cornerRadius: 18)
                 .stroke(AppTheme.Colors.csOrange.opacity(0.35), lineWidth: 1)
@@ -339,7 +344,7 @@ public struct StatsDashboardView: View {
                     Spacer()
 
                     Button {
-                        viewModel.isShowingFaceitConfigSheet = true
+                        selectedTab = .settings
                     } label: {
                         Image(systemName: "pencil.circle.fill")
                             .font(.title3)
@@ -390,7 +395,7 @@ public struct StatsDashboardView: View {
                 }
             }
             .padding(16)
-            .background(AppTheme.statsCardSurface)
+            .background(AppTheme.Colors.gunmetalGray)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(AppTheme.faceitLevelColor(faceit.skillLevel).opacity(0.35), lineWidth: 1)
@@ -426,7 +431,7 @@ public struct StatsDashboardView: View {
                 if filter != .faceit && faction != .both {
                     Text(faction.fullDisplayName.uppercased())
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(faction == .terrorist ? AppTheme.Colors.csOrange : AppTheme.statsAccentBlue)
+                        .foregroundStyle(faction == .terrorist ? AppTheme.Colors.csOrange : AppTheme.Colors.ctBlue)
                 } else {
                     Text(viewModel.selectedTimeFrame.rawValue.uppercased())
                         .font(.system(size: 10, weight: .bold))
@@ -443,7 +448,7 @@ public struct StatsDashboardView: View {
                         : String(format: "%.2f", kd),
                     subtitle: kdSubtitle(activeSteam: activeSteam, filter: filter, faction: faction),
                     icon: "scope",
-                    accentColor: kd >= 1.0 ? AppTheme.statsPositiveGreen : AppTheme.Colors.csOrange
+                    accentColor: kd >= 1.0 ? AppTheme.Colors.statusSuccess : AppTheme.Colors.csOrange
                 )
 
                 // Card 2: Win Rate % (or Faction Dominance %)
@@ -458,7 +463,7 @@ public struct StatsDashboardView: View {
                         faction: faction
                     ),
                     icon: "trophy.fill",
-                    accentColor: winRate >= 50.0 ? AppTheme.statsPositiveGreen : AppTheme.statsAccentBlue
+                    accentColor: winRate >= 50.0 ? AppTheme.Colors.statusSuccess : AppTheme.Colors.ctBlue
                 )
 
                 // Card 3: Headshot %
@@ -477,7 +482,7 @@ public struct StatsDashboardView: View {
                         value: String(format: "%.1f HP", faceitAdr),
                         subtitle: "Avg. Damage / Round",
                         icon: "bolt.shield.fill",
-                        accentColor: faceitAdr >= 80.0 ? AppTheme.statsPositiveGreen : AppTheme.statsAccentBlue
+                        accentColor: faceitAdr >= 80.0 ? AppTheme.Colors.statusSuccess : AppTheme.Colors.ctBlue
                     )
                 } else {
                     let accuracy = faction != .both
@@ -488,7 +493,7 @@ public struct StatsDashboardView: View {
                         value: String(format: "%.1f%%", accuracy),
                         subtitle: accuracySubtitle(activeSteam: activeSteam, factionSummary: factionSummary, faction: faction),
                         icon: "target",
-                        accentColor: AppTheme.statsAccentBlue
+                        accentColor: AppTheme.Colors.ctBlue
                     )
                 }
 
@@ -510,7 +515,7 @@ public struct StatsDashboardView: View {
                         faction: faction
                     ),
                     icon: faction == .terrorist ? "flame.fill" : (faction == .counterTerrorist ? "wrench.and.screwdriver.fill" : "star.fill"),
-                    accentColor: faction == .counterTerrorist ? AppTheme.statsAccentBlue : Color.yellow
+                    accentColor: faction == .counterTerrorist ? AppTheme.Colors.ctBlue : Color.yellow
                 )
 
                 // Card 6: Playtime / Total Matches
@@ -519,7 +524,7 @@ public struct StatsDashboardView: View {
                     value: playtimeOrMatchesValue(stats: stats, activeSteam: activeSteam, filter: filter),
                     subtitle: playtimeOrMatchesSubtitle(stats: stats, activeSteam: activeSteam, filter: filter),
                     icon: "clock.fill",
-                    accentColor: AppTheme.statsAccentBlue
+                    accentColor: AppTheme.Colors.ctBlue
                 )
             }
         }
@@ -560,7 +565,7 @@ public struct StatsDashboardView: View {
                         .frame(width: max(geo.size.width * tShare - 2, 12), height: 8)
 
                     Capsule()
-                        .fill(AppTheme.statsAccentBlue)
+                        .fill(AppTheme.Colors.ctBlue)
                         .frame(width: max(geo.size.width * (1.0 - tShare) - 2, 12), height: 8)
                 }
             }
@@ -587,7 +592,7 @@ public struct StatsDashboardView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("CT-SIDE (DEFENSE)")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(AppTheme.statsAccentBlue)
+                        .foregroundStyle(AppTheme.Colors.ctBlue)
                     Text("\(summary.counterTerroristRoundsWon.formatted()) Rounds Won")
                         .font(.caption.monospacedDigit().weight(.bold))
                         .foregroundStyle(.white)
@@ -599,10 +604,10 @@ public struct StatsDashboardView: View {
             }
         }
         .padding(16)
-        .background(AppTheme.statsCardSurface)
+        .background(AppTheme.Colors.gunmetalGray)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
@@ -627,10 +632,10 @@ public struct StatsDashboardView: View {
                             .font(.caption2.weight(.heavy))
                             .frame(width: 22, height: 22)
                             .background(
-                                (isWin ? AppTheme.statsPositiveGreen : AppTheme.statsDangerRed)
+                                (isWin ? AppTheme.Colors.statusSuccess : AppTheme.Colors.statusDanger)
                                     .opacity(0.2)
                             )
-                            .foregroundStyle(isWin ? AppTheme.statsPositiveGreen : AppTheme.statsDangerRed)
+                            .foregroundStyle(isWin ? AppTheme.Colors.statusSuccess : AppTheme.Colors.statusDanger)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
@@ -642,7 +647,7 @@ public struct StatsDashboardView: View {
                     .foregroundStyle(.secondary)
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.statsCardSurface)
+                    .background(AppTheme.Colors.gunmetalGray)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
             } else {
                 VStack(spacing: 10) {
@@ -655,7 +660,7 @@ public struct StatsDashboardView: View {
     }
 
     private func faceitMatchRowCard(match: FaceitMatchSummary) -> some View {
-        let resultColor = match.isWin ? AppTheme.statsPositiveGreen : AppTheme.statsDangerRed
+        let resultColor = match.isWin ? AppTheme.Colors.statusSuccess : AppTheme.Colors.statusDanger
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -710,7 +715,7 @@ public struct StatsDashboardView: View {
                         miniMatchStat(
                             label: "K/D",
                             value: String(format: "%.2f", kd),
-                            color: kd >= 1.0 ? AppTheme.statsPositiveGreen : AppTheme.Colors.csOrange
+                            color: kd >= 1.0 ? AppTheme.Colors.statusSuccess : AppTheme.Colors.csOrange
                         )
                     }
                     if let mvps = match.mvps {
@@ -720,14 +725,14 @@ public struct StatsDashboardView: View {
                         miniMatchStat(
                             label: "ADR",
                             value: String(format: "%.1f", adr),
-                            color: AppTheme.statsAccentBlue
+                            color: AppTheme.Colors.ctBlue
                         )
                     }
                 }
             }
         }
         .padding(14)
-        .background(AppTheme.statsCardSurface)
+        .background(AppTheme.Colors.gunmetalGray)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .stroke(resultColor.opacity(0.28), lineWidth: 1)
@@ -884,10 +889,10 @@ public struct StatsDashboardView: View {
                         }
                     }
                     .padding(16)
-                    .background(AppTheme.statsCardSurface)
+                    .background(AppTheme.Colors.gunmetalGray)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                            .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
@@ -927,7 +932,7 @@ public struct StatsDashboardView: View {
             Spacer()
         }
         .padding(14)
-        .background(AppTheme.statsCardSurface)
+        .background(AppTheme.Colors.gunmetalGray)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .stroke(AppTheme.Colors.csOrange.opacity(0.35), lineWidth: 1)
@@ -983,10 +988,10 @@ public struct StatsDashboardView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.statsCardSurface)
+        .background(AppTheme.Colors.gunmetalGray)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.statsCardBorder, lineWidth: 1)
+                .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
@@ -999,59 +1004,7 @@ public struct StatsDashboardView: View {
             .padding(.top, 4)
     }
 
-    // MARK: - FACEIT Configuration Sheet
 
-    private var faceitConfigurationSheet: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("FACEIT Nickname or Player ID", text: $viewModel.faceitIdentifierInput)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("Player Lookup")
-                } footer: {
-                    Text("Accepts an exact FACEIT Nickname (e.g. ZywOo), a FACEIT Player UUID, or leave blank to resolve via your SteamID64.")
-                }
-
-                Section {
-                    SecureField("FACEIT v4 Client API Key (Bearer)", text: $viewModel.faceitAPIKeyInput)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("FACEIT Open API v4 Key")
-                } footer: {
-                    Text("Stored locally in the iOS Keychain (Zero-Trust). Required by open.faceit.com/data/v4 endpoints.")
-                }
-
-                Section {
-                    Button(role: .destructive) {
-                        viewModel.clearStatsCache()
-                    } label: {
-                        Label("Clear Cached Stats & Snapshots", systemImage: "trash")
-                    }
-                }
-            }
-            .navigationTitle("FACEIT Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        viewModel.isShowingFaceitConfigSheet = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save & Sync") {
-                        Task {
-                            await viewModel.saveFaceitConfigurationAndRefresh(explicitSteamID64: steamID64)
-                        }
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
 
     // MARK: - Card Title & Subtitle Formatters
 
@@ -1211,162 +1164,3 @@ public struct StatsDashboardView: View {
     }
 }
 
-// MARK: - Map Performance Card Component (Clean Map Name + Rounds & Win Rate)
-
-private struct MapPerformanceCard: View {
-    let mapStat: SteamMapStatSummary
-
-    var body: some View {
-        let winRatio = min(max(mapStat.winRatePercentage / 100.0, 0.0), 1.0)
-        let accentColor = mapStat.winRatePercentage >= 50.0 ? AppTheme.statsPositiveGreen : AppTheme.Colors.csOrange
-
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.Colors.csOrange.opacity(0.18))
-                        .frame(width: 30, height: 30)
-                    Image(systemName: mapStat.iconName)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(AppTheme.Colors.csOrange)
-                }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(mapStat.displayName)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                    Text(mapStat.isActiveDuty ? "Active Duty" : "Reserve Pool")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(alignment: .firstTextBaseline) {
-                Text(String(format: "%.1f%%", mapStat.winRatePercentage))
-                    .font(.title3.monospacedDigit().weight(.black))
-                    .foregroundStyle(accentColor)
-
-                Spacer()
-
-                Text("\(mapStat.roundsPlayed.formatted()) Rnds")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(AppTheme.statsDangerRed.opacity(0.35))
-                        .frame(height: 6)
-
-                    Capsule()
-                        .fill(accentColor)
-                        .frame(width: max(geo.size.width * winRatio, 6), height: 6)
-                }
-            }
-            .frame(height: 6)
-
-            HStack {
-                Text("\(mapStat.roundsWon.formatted()) Won")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(AppTheme.statsPositiveGreen)
-                Spacer()
-                Text("\(mapStat.roundsLost.formatted()) Lost")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(AppTheme.statsDangerRed)
-            }
-        }
-        .padding(14)
-        .frame(width: 178)
-        .background(AppTheme.statsCardSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(AppTheme.statsCardBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-}
-
-// MARK: - Reusable Stat Metric Card
-
-private struct StatMetricCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-    let icon: String
-    let accentColor: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer()
-                Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundStyle(accentColor)
-            }
-
-            Text(value)
-                .font(.title2.monospacedDigit().weight(.bold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.statsCardSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(AppTheme.statsCardBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-}
-
-// MARK: - FACEIT Skill Level 1-10 Vector Badge
-
-private struct FaceitSkillLevelBadge: View {
-    let level: Int
-    let progress: Double
-
-    var body: some View {
-        let tierColor = AppTheme.faceitLevelColor(level)
-
-        ZStack {
-            Circle()
-                .stroke(Color.white.opacity(0.1), lineWidth: 5)
-
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    tierColor,
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-
-            VStack(spacing: 0) {
-                Text("LVL")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.secondary)
-                Text("\(level)")
-                    .font(.system(size: 20, weight: .black, design: .rounded))
-                    .foregroundStyle(tierColor)
-            }
-        }
-        .frame(width: 54, height: 54)
-    }
-}

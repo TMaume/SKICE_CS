@@ -38,12 +38,12 @@ public enum SteamStatsError: LocalizedError, Equatable, Sendable {
 public actor SteamStatsService {
     public static let shared = SteamStatsService()
 
-    private let session: URLSession
+    private let client: APIClient
     private let cs2AppID = "730"
     private let tag = "SteamStatsService"
 
     public init(session: URLSession = .shared) {
-        self.session = session
+        self.client = APIClient(session: session)
     }
 
     public func fetchPlayerStats(steamID64: String, apiKey: String) async throws -> SteamPlayerStats {
@@ -83,13 +83,10 @@ public actor SteamStatsService {
             DebugLogger.shared.logStatsNetworkRequest(request, tag: serviceTag)
         }
 
-        let startTime = ContinuousClock.now
-        let data: Data
-        let response: URLResponse
-
+        let apiResponse: APIResponse
         do {
-            (data, response) = try await session.data(for: request)
-        } catch {
+            apiResponse = try await client.send(request)
+        } catch let error as APIClientError {
             let errText = error.localizedDescription
             await MainActor.run {
                 DebugLogger.shared.logStatsError(errText, tag: serviceTag)
@@ -97,15 +94,11 @@ public actor SteamStatsService {
             throw SteamStatsError.networkFailure(errText)
         }
 
-        let elapsedMs = Int(startTime.duration(to: .now).components.attoseconds / 1_000_000_000_000_000)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SteamStatsError.networkFailure("Invalid HTTP response")
-        }
-
-        let statusCode = httpResponse.statusCode
-        let byteCount = data.count
+        let statusCode = apiResponse.statusCode
+        let byteCount = apiResponse.data.count
+        let elapsedMs = apiResponse.durationMs
         let bodyPreview: String? = statusCode != 200
-            ? String(data: data.prefix(220), encoding: .utf8)?.replacingOccurrences(of: "\n", with: " ")
+            ? String(data: apiResponse.data.prefix(220), encoding: .utf8)?.replacingOccurrences(of: "\n", with: " ")
             : nil
 
         await MainActor.run {
@@ -151,7 +144,7 @@ public actor SteamStatsService {
         }
 
         do {
-            let decoded = try JSONDecoder().decode(SteamUserStatsResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(SteamUserStatsResponse.self, from: apiResponse.data)
             guard let payload = decoded.playerstats,
                   let rawStats = payload.stats,
                   !rawStats.isEmpty else {
@@ -182,9 +175,8 @@ public actor SteamStatsService {
         request.timeoutInterval = 10
 
         do {
-            let (_, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { return false }
-            return http.statusCode == 200
+            let apiResponse = try await client.send(request)
+            return apiResponse.statusCode == 200
         } catch {
             return false
         }
