@@ -58,7 +58,7 @@ public struct SettingsView: View {
                 .padding(.vertical, 12)
             }
         }
-        .navigationTitle("SETTINGS")
+        .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(AppTheme.Colors.oledBlack, for: .navigationBar)

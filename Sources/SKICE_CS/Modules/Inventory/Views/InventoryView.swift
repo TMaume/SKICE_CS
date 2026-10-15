@@ -11,6 +11,7 @@ public struct InventoryView: View {
     @State private var selectedItemForDetail: SkinItem?
     @State private var isShowingDebugSheet: Bool = false
     @State private var isShowingTradeUpCalculator: Bool = false
+    @State private var isShowingFilters: Bool = false
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 155, maximum: 210), spacing: 12)
@@ -28,22 +29,16 @@ public struct InventoryView: View {
         ZStack {
             AppTheme.Colors.oledBlack.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                if !viewModel.items.isEmpty {
-                    summaryHeaderBar
-                    portfolioValueBar
-                    tradeUpTile
-                    filterControlBar
-                }
-
-                contentArea
-            }
+            contentArea
         }
-        .navigationTitle("CS2 Inventory")
+        .navigationTitle("Inventory")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbarBackground(AppTheme.Colors.oledBlack, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .searchable(
             text: $viewModel.searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
+            placement: .toolbar,
             prompt: "Search skins, knives, collections..."
         )
         .toolbar {
@@ -88,6 +83,9 @@ public struct InventoryView: View {
                 .accessibilityLabel("Refresh Inventory")
             }
         }
+        .sheet(isPresented: $isShowingFilters) {
+            InventoryFilterSheet(viewModel: viewModel)
+        }
         .sheet(item: $selectedItemForDetail) { item in
             SkinDetailSheet(item: item, price: viewModel.price(for: item))
                 .presentationDetents([.medium, .large])
@@ -119,257 +117,55 @@ public struct InventoryView: View {
 
     // MARK: - Subviews
 
-    /// Prominent, labelled entry point to the Trade-Up Contract calculator.
-    private var tradeUpTile: some View {
-        Button {
-            isShowingTradeUpCalculator = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(AppTheme.Colors.csOrange)
-                    .frame(width: 34, height: 34)
-                    .background(AppTheme.Colors.csOrange.opacity(0.15))
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("TRADE-UP CONTRACT")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.white)
-                    Text("Simulate 10 same-rarity items · EV & ROI in EUR")
-                        .font(.system(size: 10))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-            .background(Color(white: 0.07))
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(Color.white.opacity(0.06))
-                    .frame(height: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Open Trade-Up Calculator")
-    }
-
-    private var summaryHeaderBar: some View {
-        HStack(spacing: 14) {
-            statPill(title: "TOTAL", value: "\(viewModel.totalItemsCount)", color: .white)
-            statPill(title: "TRADABLE", value: "\(viewModel.tradableItemsCount)", color: AppTheme.Colors.statusSuccess)
-            if viewModel.cooldownItemsCount > 0 {
-                statPill(title: "COOLDOWN", value: "\(viewModel.cooldownItemsCount)", color: AppTheme.Colors.csOrange)
-            }
-            statPill(title: "UNTRADABLE", value: "\(viewModel.untradableItemsCount)", color: Color(white: 0.65))
-            statPill(title: "STATTRAK™", value: "\(viewModel.statTrakItemsCount)", color: AppTheme.statTrakOrange)
-            Spacer()
-            Text("\(viewModel.filteredItems.count) shown")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(white: 0.08))
-    }
-
-    private func statPill(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                .foregroundStyle(color)
-        }
-    }
-
-    private var portfolioValueBar: some View {
+    /// Single-row compact summary (item counts + market value + filter entry).
+    /// Lives inside the scrollable content so it scrolls away with the grid.
+    private var compactSummaryBar: some View {
         let value = viewModel.portfolioValue
 
         return HStack(spacing: 10) {
-            Image(systemName: "eurosign.circle.fill")
-                .font(.system(size: 16, weight: .bold))
+            Image(systemName: "shippingbox.fill")
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(AppTheme.Colors.csOrange)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("MARKET VALUE")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-                Text(value.pricedCount > 0 ? PriceFormatter.eur(value.total) : "—")
-                    .font(.system(size: 15, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
+            Text("\(viewModel.totalItemsCount)")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white)
+
+            Text("\(viewModel.tradableItemsCount) tradable")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+
+            if viewModel.statTrakItemsCount > 0 {
+                Text("\(viewModel.statTrakItemsCount) ST™")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.statTrakOrange)
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 1) {
-                Text("\(value.pricedCount)/\(value.totalCount) items priced")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                Text(viewModel.priceStore.isLoading ? "Loading Steam prices…" : "Steam Market · EUR")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
+            Text(value.pricedCount > 0 ? PriceFormatter.eur(value.total) : "—")
+                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                .foregroundStyle(AppTheme.Colors.csOrange)
+
+            Button {
+                isShowingFilters = true
+            } label: {
+                Image(systemName: viewModel.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(viewModel.hasActiveFilters ? AppTheme.Colors.csOrange : AppTheme.Colors.textSecondary)
             }
+            .accessibilityLabel("Filters")
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(white: 0.06))
-    }
-
-    private var filterControlBar: some View {
-        VStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(viewModel.availableCategories, id: \.self) { category in
-                        let isSelected = viewModel.selectedCategory == category
-                        Button {
-                            withAnimation(.snappy(duration: 0.2)) {
-                                viewModel.selectedCategory = category
-                            }
-                        } label: {
-                            Text(category)
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected ? Color.orange : Color(white: 0.14))
-                                )
-                                .foregroundStyle(isSelected ? .black : .white)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    // Sort Menu
-                    Menu {
-                        Picker("Sort By", selection: $viewModel.sortOption) {
-                            ForEach(InventorySortOption.allCases) { option in
-                                Text(option.rawValue).tag(option)
-                            }
-                        }
-                    } label: {
-                        filterChipLabel(
-                            icon: "arrow.up.arrow.down",
-                            text: viewModel.sortOption.rawValue,
-                            isActive: viewModel.sortOption != .rarityDescending
-                        )
-                    }
-
-                    // Trade Status Filter Menu
-                    Menu {
-                        Picker("Trade Status", selection: $viewModel.tradeFilter) {
-                            ForEach(InventoryTradeFilter.allCases) { filterOption in
-                                Text(filterOption.rawValue).tag(filterOption)
-                            }
-                        }
-                    } label: {
-                        filterChipLabel(
-                            icon: viewModel.tradeFilter == .all ? "arrow.left.arrow.right" : "lock.shield",
-                            text: viewModel.tradeFilter == .all ? "Trade Status" : viewModel.tradeFilter.rawValue,
-                            isActive: viewModel.tradeFilter != .all
-                        )
-                    }
-
-                    // Rarity Filter Menu
-                    Menu {
-                        Button("All Rarities") {
-                            viewModel.selectedRarity = nil
-                        }
-                        Divider()
-                        ForEach(SkinRarity.allCases.reversed(), id: \.self) { rarity in
-                            Button(rarity.rawValue) {
-                                viewModel.selectedRarity = rarity
-                            }
-                        }
-                    } label: {
-                        filterChipLabel(
-                            icon: "sparkles",
-                            text: viewModel.selectedRarity?.rawValue ?? "Rarity",
-                            isActive: viewModel.selectedRarity != nil
-                        )
-                    }
-
-                    // Exterior Filter Menu
-                    Menu {
-                        Button("All Exteriors") {
-                            viewModel.selectedExterior = nil
-                        }
-                        Divider()
-                        ForEach(SkinExterior.allCases, id: \.self) { exterior in
-                            Button(exterior.rawValue) {
-                                viewModel.selectedExterior = exterior
-                            }
-                        }
-                    } label: {
-                        filterChipLabel(
-                            icon: "shield.lefthalf.filled",
-                            text: viewModel.selectedExterior?.shortCode ?? viewModel.selectedExterior?.rawValue ?? "Exterior",
-                            isActive: viewModel.selectedExterior != nil
-                        )
-                    }
-
-                    // StatTrak Toggle
-                    Button {
-                        viewModel.onlyStatTrak.toggle()
-                    } label: {
-                        filterChipLabel(
-                            icon: "number",
-                            text: "StatTrak™",
-                            isActive: viewModel.onlyStatTrak
-                        )
-                    }
-
-                    if viewModel.hasActiveFilters {
-                        Button {
-                            withAnimation {
-                                viewModel.resetFilters()
-                            }
-                        } label: {
-                            Text("Reset")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.red)
-                                .padding(.horizontal, 8)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-        }
-        .padding(.vertical, 8)
-        .background(Color(white: 0.05))
-    }
-
-    private func filterChipLabel(icon: String, text: String, isActive: Bool) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-            Text(text)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isActive ? Color.orange.opacity(0.22) : Color(white: 0.12))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(white: 0.08))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(isActive ? Color.orange : Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(AppTheme.Colors.borderSubtle, lineWidth: 1)
                 )
         )
-        .foregroundStyle(isActive ? Color.orange : .white)
     }
 
     @ViewBuilder
@@ -406,27 +202,32 @@ public struct InventoryView: View {
             }
         } else {
             ScrollView {
-                if isGridView {
-                    LazyVGrid(columns: gridColumns, spacing: 12) {
-                        ForEach(viewModel.filteredItems) { item in
-                            SkinGridCard(item: item, price: viewModel.price(for: item))
-                                .onTapGesture {
-                                    selectedItemForDetail = item
-                                }
+                VStack(spacing: 12) {
+                    if !viewModel.items.isEmpty {
+                        compactSummaryBar
+                    }
+
+                    if isGridView {
+                        LazyVGrid(columns: gridColumns, spacing: 12) {
+                            ForEach(viewModel.filteredItems) { item in
+                                SkinGridCard(item: item, price: viewModel.price(for: item))
+                                    .onTapGesture {
+                                        selectedItemForDetail = item
+                                    }
+                            }
+                        }
+                    } else {
+                        LazyVStack(spacing: 8) {
+                            ForEach(viewModel.filteredItems) { item in
+                                SkinListRow(item: item, price: viewModel.price(for: item))
+                                    .onTapGesture {
+                                        selectedItemForDetail = item
+                                    }
+                            }
                         }
                     }
-                    .padding(16)
-                } else {
-                    LazyVStack(spacing: 8) {
-                        ForEach(viewModel.filteredItems) { item in
-                            SkinListRow(item: item, price: viewModel.price(for: item))
-                                .onTapGesture {
-                                    selectedItemForDetail = item
-                                }
-                        }
-                    }
-                    .padding(16)
                 }
+                .padding(16)
             }
             .refreshable {
                 await viewModel.loadInventory(for: steamID64, forceRefresh: true)
@@ -959,5 +760,198 @@ private struct WearTierBar: View {
                 }
             }
         }
+    }
+}
+// MARK: - Filters Sheet
+
+private struct InventoryFilterSheet: View {
+    let viewModel: InventoryViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.Colors.oledBlack.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 12) {
+                        categorySection
+                        raritySection
+                        exteriorSection
+                        tradeStatusSection
+                        statTrakSection
+                        sortSection
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if viewModel.hasActiveFilters {
+                        Button("Reset") {
+                            viewModel.resetFilters()
+                        }
+                        .foregroundStyle(AppTheme.Colors.statusDanger)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppTheme.Colors.csOrange)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    // MARK: Sections
+
+    private var categorySection: some View {
+        sectionCard("Category") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(viewModel.availableCategories, id: \.self) { category in
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) {
+                                viewModel.selectedCategory = category
+                            }
+                        } label: {
+                            Text(category)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule().fill(viewModel.selectedCategory == category ? AppTheme.Colors.csOrange : Color(white: 0.14))
+                                )
+                                .foregroundStyle(viewModel.selectedCategory == category ? .black : .white)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var raritySection: some View {
+        sectionCard("Rarity") {
+            Menu {
+                Button("All Rarities") { viewModel.selectedRarity = nil }
+                Divider()
+                ForEach(SkinRarity.allCases.reversed(), id: \.self) { rarity in
+                    Button(rarity.rawValue) { viewModel.selectedRarity = rarity }
+                }
+            } label: {
+                menuValueRow(
+                    icon: "sparkles",
+                    value: viewModel.selectedRarity?.rawValue ?? "All",
+                    isActive: viewModel.selectedRarity != nil
+                )
+            }
+        }
+    }
+
+    private var exteriorSection: some View {
+        sectionCard("Exterior") {
+            Menu {
+                Button("All Exteriors") { viewModel.selectedExterior = nil }
+                Divider()
+                ForEach(SkinExterior.allCases, id: \.self) { exterior in
+                    Button(exterior.rawValue) { viewModel.selectedExterior = exterior }
+                }
+            } label: {
+                menuValueRow(
+                    icon: "shield.lefthalf.filled",
+                    value: viewModel.selectedExterior?.shortCode ?? viewModel.selectedExterior?.rawValue ?? "All",
+                    isActive: viewModel.selectedExterior != nil
+                )
+            }
+        }
+    }
+
+    private var tradeStatusSection: some View {
+        sectionCard("Trade Status") {
+            Menu {
+                ForEach(InventoryTradeFilter.allCases) { filter in
+                    Button(filter.rawValue) { viewModel.tradeFilter = filter }
+                }
+            } label: {
+                menuValueRow(
+                    icon: viewModel.tradeFilter == .all ? "arrow.left.arrow.right" : "lock.shield",
+                    value: viewModel.tradeFilter.rawValue,
+                    isActive: viewModel.tradeFilter != .all
+                )
+            }
+        }
+    }
+
+    private var statTrakSection: some View {
+        sectionCard("StatTrak™") {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) {
+                    viewModel.onlyStatTrak.toggle()
+                }
+            } label: {
+                HStack {
+                    Label("StatTrak™ only", systemImage: "number")
+                        .foregroundStyle(viewModel.onlyStatTrak ? AppTheme.statTrakOrange : .white)
+                    Spacer()
+                    Image(systemName: viewModel.onlyStatTrak ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(viewModel.onlyStatTrak ? AppTheme.statTrakOrange : AppTheme.Colors.textSecondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var sortSection: some View {
+        sectionCard("Sort") {
+            Menu {
+                ForEach(InventorySortOption.allCases) { option in
+                    Button(option.rawValue) { viewModel.sortOption = option }
+                }
+            } label: {
+                menuValueRow(
+                    icon: "arrow.up.arrow.down",
+                    value: viewModel.sortOption.rawValue,
+                    isActive: viewModel.sortOption != .rarityDescending
+                )
+            }
+        }
+    }
+
+    // MARK: Helpers
+
+    private func sectionCard(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(AppTheme.Fonts.sectionTitle)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+            content()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(white: 0.07))
+        )
+    }
+
+    private func menuValueRow(icon: String, value: String, isActive: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isActive ? AppTheme.Colors.csOrange : AppTheme.Colors.textSecondary)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isActive ? AppTheme.Colors.csOrange : .white)
+                .lineLimit(1)
+            Spacer()
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+        }
+        .contentShape(Rectangle())
     }
 }

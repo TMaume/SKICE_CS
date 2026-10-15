@@ -75,7 +75,7 @@ public struct StatsDashboardView: View {
                 await viewModel.refreshStats(explicitSteamID64: steamID64)
             }
         }
-        .navigationTitle("CS2 // STATS")
+        .navigationTitle("Stats")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(AppTheme.Colors.oledBlack, for: .navigationBar)

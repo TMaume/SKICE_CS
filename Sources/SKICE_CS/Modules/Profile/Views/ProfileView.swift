@@ -41,7 +41,7 @@ public struct ProfileView: View {
                 .padding(.vertical, 12)
             }
         }
-        .navigationTitle("HOME")
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(AppTheme.Colors.oledBlack, for: .navigationBar)
