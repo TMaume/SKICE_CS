@@ -2,7 +2,7 @@
 
 Personal CS2 companion for iOS. Zero-trust by design. No third-party APIs in the MVP runtime.
 
-- Last updated: 2026-10-15
+- Last updated: 2026-10-16
 - Platform: iOS 17+ (SwiftUI, OLED black)
 - Toolchain: xtool (SwiftPM cross-compilation, Linux -> iOS), no Xcode project
 
@@ -35,9 +35,9 @@ The app talks only to first-party services: Valve/Steam (Web API, inventory, mar
 
 Tier A — MVP (key-based). SteamID64 + Steam Web API key stored in Keychain. Enables the public inventory reader and basic stats. No OpenID.
 
-Tier B — Auth session Steam (BLOCKING MILESTONE). Real Steam session tokens (OAuth / Steam Guard). Required for anything that touches the Game Coordinator: Loadouts, Inspect Float / Seed / Stickers.
+Tier B — Auth session Steam (DELIVERED 2026-10-16). Real Steam session tokens via QR or password + Steam Guard, stored in the Keychain. Required for anything that touches the Game Coordinator: Loadouts, Inspect Float / Seed / Stickers.
 
-Tier B gates all GC-dependent work. Do not schedule GC features before this milestone.
+Tier B is delivered; GC-dependent work is now unblocked.
 
 Note: the Web API inventory reader requires a public Steam profile; private inventories surface an explicit error state.
 
@@ -122,9 +122,9 @@ CS2 Game State Integration (GSI) only emits locally. To use it on the phone:
 
 1. Price history (Steam EUR) — builds on M3.
 2. Trade-Up simulator (EV/ROI) — delivered.
-3. BLOCKING MILESTONE — Auth session Steam (OAuth / Steam Guard).
-4. GC Protobuf: Loadouts — only after the auth milestone.
-5. GC Inspect: Float / Seed / Stickers — only after the auth milestone.
+3. BLOCKING MILESTONE — Auth session Steam (OAuth / Steam Guard). ✔ delivered 2026-10-16.
+4. GC Protobuf: Loadouts — unblocked (auth milestone done).
+5. GC Inspect: Float / Seed / Stickers — unblocked (auth milestone done).
 
 ### Phase 3 — Desktop Daemon
 
@@ -184,11 +184,12 @@ Sources/SKICE_CS/
 
 ---
 
-## 7. Implementation state (2026-10-15)
+## 7. Implementation state (2026-10-16)
 
 DELIVERED
 
 - Auth Tier A (SteamID64 + Web API key in Keychain; no OpenID).
+- Auth session Steam (Tier B): QR or password sign-in with Steam Guard; refresh/access tokens in the Keychain; "remember password" for quick re-connect.
 - Inventory: Steam parser, rarity / exterior / trade-lock badges, grid + list, search, filters (sheet).
 - Pricing: Steam Community Market EUR, 24h local cache, ~400 items/pass, concurrency 6.
 - Trade-Up: Valve engine (majority collection, R -> R+1, normalized average float, all-or-nothing StatTrak, souvenir rejected), EV/ROI EUR, embedded local catalog.
@@ -199,15 +200,15 @@ NOT STARTED (empty placeholders)
 
 - Loadout (GC), Remote Match (daemon + APNs), Tactics (lineups / economy), Demo Parser.
 
-BLOCKED
+UNBLOCKED
 
-- Game Coordinator (Loadouts, Inspect Float / Seed / Stickers) -> depends on the "Auth session Steam" milestone.
+- Game Coordinator (Loadouts, Inspect Float / Seed / Stickers): the "Auth session Steam" milestone is delivered, so GC protobuf work can now proceed.
 
 ---
 
 ## 8. Decisions (ADR)
 
-- ADR-01 Auth MVP = key-based (SteamID64 + Web API key); OAuth / Steam Guard deferred until the "Auth session Steam" milestone.
+- ADR-01 Auth MVP = key-based (SteamID64 + Web API key); OAuth / Steam Guard deferred until the "Auth session Steam" milestone. Delivered 2026-10-16 (QR + password + Steam Guard, tokens in Keychain).
 - ADR-02 Pricing = Steam Community Market EUR only; third-party sources deferred.
 - ADR-03 Trade-up catalog = baked local dataset; no third-party runtime calls.
 - ADR-04 Zero-trust: no intermediary infra, no credential relay; everything stays on-device.
