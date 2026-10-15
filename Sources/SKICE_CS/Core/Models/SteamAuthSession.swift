@@ -123,6 +123,7 @@ public final class SteamAuthSession {
     public func signIn(
         accountName: String,
         password: String,
+        guardCode: String? = nil,
         platformType: SteamTokenPlatformType = .steamClient
     ) async {
         let account = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -152,7 +153,16 @@ public final class SteamAuthSession {
             case .guardRequired(let challenge):
                 pendingChallenge = challenge
                 guardOptions = challenge.confirmations
-                applyGuardState(for: challenge)
+
+                // If the user already typed a Steam Guard code into the form,
+                // submit it now rather than asking for it a second time.
+                let providedCode = guardCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let codeKind = challenge.confirmations.first { $0.kind.requiresCodeEntry }?.kind
+                if !providedCode.isEmpty, let codeKind {
+                    await submitGuardCode(providedCode, kind: codeKind)
+                } else {
+                    applyGuardState(for: challenge)
+                }
             case .authorized(let tokens):
                 try persist(tokens: tokens, challenge: nil)
             }

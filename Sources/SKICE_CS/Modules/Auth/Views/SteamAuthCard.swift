@@ -229,7 +229,7 @@ public struct SteamAuthCard: View {
 
     private var passwordOption: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sign in with your Steam account name and password, then enter your Steam Guard code when Steam asks for it. The password is used once and never stored.")
+            Text("Sign in with your Steam account name and password. Add your Steam Guard code now, or leave it blank and the app will ask for it after your password. The password is used once and never stored.")
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -271,10 +271,29 @@ public struct SteamAuthCard: View {
                 .tacticalTextField()
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("STEAM GUARD CODE (OPTIONAL)")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                TextField("temporary code from your Steam app", text: $guardCodeInput)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .tacticalTextField()
+                Text("The temporary code from your Steam app, or the code Steam emails you.")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Button {
                 Task {
-                    await authSession.signIn(accountName: accountNameInput, password: passwordInput)
+                    await authSession.signIn(
+                        accountName: accountNameInput,
+                        password: passwordInput,
+                        guardCode: guardCodeInput
+                    )
                     passwordInput = ""
+                    guardCodeInput = ""
                 }
             } label: {
                 HStack(spacing: 8) {
