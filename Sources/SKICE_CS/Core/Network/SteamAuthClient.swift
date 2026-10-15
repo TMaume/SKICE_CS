@@ -86,19 +86,22 @@ public struct SteamAuthChallenge: Sendable, Equatable {
     public let steamID: String?
     public let pollInterval: Double
     public let confirmations: [SteamGuardConfirmation]
+    public let challengeURL: String?
 
     public init(
         clientID: UInt64,
         requestID: String,
         steamID: String?,
         pollInterval: Double,
-        confirmations: [SteamGuardConfirmation]
+        confirmations: [SteamGuardConfirmation],
+        challengeURL: String? = nil
     ) {
         self.clientID = clientID
         self.requestID = requestID
         self.steamID = steamID
         self.pollInterval = pollInterval
         self.confirmations = confirmations
+        self.challengeURL = challengeURL
     }
 }
 
@@ -209,7 +212,7 @@ public struct SteamAuthClient: Sendable {
         return SteamRSAPublicKey(
             modulusHex: key.publickeyMod,
             exponentHex: key.publickeyExp,
-            timestamp: key.timestamp ?? 0
+            timestamp: key.timestamp
         )
     }
 
@@ -274,6 +277,46 @@ public struct SteamAuthClient: Sendable {
         )
 
         return .guardRequired(challenge)
+    }
+
+    /// Starts a QR login session: the user scans the returned challenge with the
+    /// Steam mobile app and approves there. No password is handled on-device.
+    public func beginAuthSessionViaQR(
+        platformType: SteamTokenPlatformType = .steamClient
+    ) async throws -> SteamAuthChallenge {
+        var deviceDetails = ProtobufEncoder()
+        deviceDetails.writeString(1, platformType.deviceLabel)
+        deviceDetails.writeInt32(2, Int32(platformType.rawValue))
+
+        var payload = ProtobufEncoder()
+        payload.writeMessage(3, deviceDetails)
+
+        let envelope: BeginAuthSessionViaQREnvelope = try await sendProtobuf(
+            payload,
+            method: "BeginAuthSessionViaQR"
+        )
+
+        guard let response = envelope.response,
+              response.clientID != 0,
+              !response.requestID.isEmpty else {
+            throw SteamAuthError.malformedResponse("BeginAuthSessionViaQR returned no challenge")
+        }
+
+        let confirmations = response.allowedConfirmations.map {
+            SteamGuardConfirmation(
+                kind: SteamGuardKind(rawValue: $0.confirmationType) ?? .unknown,
+                message: $0.associatedMessage
+            )
+        }
+
+        return SteamAuthChallenge(
+            clientID: response.clientID,
+            requestID: response.requestID,
+            steamID: nil,
+            pollInterval: max(Double(response.interval ?? 5), 1),
+            confirmations: confirmations,
+            challengeURL: response.challengeURL
+        )
     }
 
     /// Supplies a Steam Guard code for a pending session.
@@ -498,12 +541,19 @@ struct PasswordRSAPublicKeyEnvelope: Decodable, Sendable {
     struct Payload: Decodable, Sendable {
         let publickeyMod: String
         let publickeyExp: String
-        let timestamp: UInt64?
+        let timestamp: UInt64
 
         enum CodingKeys: String, CodingKey {
             case publickeyMod = "publickey_mod"
             case publickeyExp = "publickey_exp"
             case timestamp
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            publickeyMod = try container.decode(String.self, forKey: .publickeyMod)
+            publickeyExp = try container.decode(String.self, forKey: .publickeyExp)
+            timestamp = (try? container.decode(SteamUInt64.self, forKey: .timestamp))?.value ?? 0
         }
     }
     let response: Payload?
@@ -576,6 +626,34 @@ struct GenerateAccessTokenEnvelope: Decodable, Sendable {
         enum CodingKeys: String, CodingKey {
             case accessToken = "access_token"
             case refreshToken = "refresh_token"
+        }
+    }
+    let response: Payload?
+}
+
+struct BeginAuthSessionViaQREnvelope: Decodable, Sendable {
+    struct Payload: Decodable, Sendable {
+        let clientID: UInt64
+        let requestID: String
+        let interval: Float?
+        let allowedConfirmations: [BeginAuthSessionEnvelope.Confirmation]
+        let challengeURL: String?
+
+        enum CodingKeys: String, CodingKey {
+            case clientID = "client_id"
+            case requestID = "request_id"
+            case interval
+            case allowedConfirmations = "allowed_confirmations"
+            case challengeURL = "challenge_url"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            clientID = try container.decode(SteamUInt64.self, forKey: .clientID).value
+            requestID = (try? container.decode(String.self, forKey: .requestID)) ?? ""
+            interval = try? container.decode(Float.self, forKey: .interval)
+            allowedConfirmations = (try? container.decode([BeginAuthSessionEnvelope.Confirmation].self, forKey: .allowedConfirmations)) ?? []
+            challengeURL = try? container.decode(String.self, forKey: .challengeURL)
         }
     }
     let response: Payload?

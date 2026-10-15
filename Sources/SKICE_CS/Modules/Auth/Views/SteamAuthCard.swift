@@ -1,17 +1,28 @@
 import SwiftUI
+import UIKit
+import CoreImage.CIFilterBuiltins
 
-/// Tier B entry point in Settings: sign in to a real Steam session (token pair
-/// plus Steam Guard), inspect the stored session, sign out.
-///
-/// Nothing here leaves the device except direct requests to Steam, and the
-/// tokens themselves are written to the Keychain by SteamAuthSession.
+/// Renders a QR code image for a given string payload.
+private func makeQRImage(from string: String) -> UIImage? {
+    guard !string.isEmpty else { return nil }
+    let filter = CIFilter.qrCodeGenerator()
+    filter.message = Data(string.utf8)
+    filter.correctionLevel = "M"
+    guard let output = filter.outputImage else { return nil }
+    let scale: CGFloat = 12
+    let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    let context = CIContext()
+    guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+    return UIImage(cgImage: cgImage)
+}
+
+/// Tier 3 entry point in Settings: sign in to a real Steam session by scanning
+/// a QR code with the Steam mobile app. No password is handled on-device, and
+/// the resulting tokens live in the Keychain.
 public struct SteamAuthCard: View {
     let authSession: SteamAuthSession
 
-    @State private var accountNameInput: String = ""
-    @State private var passwordInput: String = ""
     @State private var guardCodeInput: String = ""
-    @State private var isPasswordVisible: Bool = false
 
     public init(authSession: SteamAuthSession) {
         self.authSession = authSession
@@ -40,25 +51,21 @@ public struct SteamAuthCard: View {
             }
         }
         .tacticalCard(accentBorder: isConnected ? AppTheme.Colors.statusSuccess.opacity(0.4) : nil)
-        .onAppear {
-            if accountNameInput.isEmpty, let stored = authSession.accountName {
-                accountNameInput = stored
-            }
-        }
     }
 
-    // MARK: - Sections
+    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 10) {
+            tierBadge("3")
             Image(systemName: "person.badge.key.fill")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(isConnected ? AppTheme.Colors.statusSuccess : AppTheme.Colors.textSecondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text("STEAM SESSION")
+                Text("STEAM GC")
                     .font(.headline)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
-                Text("Tier B · Game Coordinator access")
+                Text("Tier 3 · Game Coordinator access")
                     .font(AppTheme.Fonts.captionMono)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
             }
@@ -74,6 +81,8 @@ public struct SteamAuthCard: View {
         }
     }
 
+    // MARK: - State
+
     @ViewBuilder
     private var stateSection: some View {
         switch authSession.state {
@@ -82,24 +91,18 @@ public struct SteamAuthCard: View {
         case .authenticating:
             busySection(label: "Contacting Steam…")
         case .awaitingRemoteApproval:
-            remoteApprovalSection
+            qrApprovalSection
         case .awaitingGuardCode:
             guardCodeSection
         case .signedOut, .expired, .failed:
-            signedOutSection
+            qrSignInSection
         }
     }
 
     private var signedInSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            infoRow(
-                label: "ACCOUNT",
-                value: authSession.accountName ?? "unknown"
-            )
-            infoRow(
-                label: "STEAMID64",
-                value: authSession.sessionSteamID64 ?? "unknown"
-            )
+            infoRow(label: "ACCOUNT", value: authSession.accountName ?? "unknown")
+            infoRow(label: "STEAMID64", value: authSession.sessionSteamID64 ?? "unknown")
             infoRow(
                 label: "ACCESS TOKEN",
                 value: authSession.accessTokenExpiry.map { "expires " + Self.expiryFormatter.string(from: $0) } ?? "expiry unknown"
@@ -136,49 +139,12 @@ public struct SteamAuthCard: View {
         }
     }
 
-    private var signedOutSection: some View {
+    private var qrSignInSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Signing in here creates a real Steam session on this device. Steam Guard is handled inside the app; tokens are written to the Keychain and sent only to Steam.")
+            Text("Sign in by scanning a QR code with the Steam mobile app. Your Steam password is never typed into this app.")
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("STEAM ACCOUNT NAME")
-                    .font(AppTheme.Fonts.captionMono)
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                TextField("account name", text: $accountNameInput)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .tacticalTextField()
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("PASSWORD")
-                        .font(AppTheme.Fonts.captionMono)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                    Spacer()
-                    Button {
-                        isPasswordVisible.toggle()
-                    } label: {
-                        Text(isPasswordVisible ? "HIDE" : "SHOW")
-                            .font(AppTheme.Fonts.captionMono)
-                            .foregroundStyle(AppTheme.Colors.ctBlue)
-                    }
-                }
-
-                Group {
-                    if isPasswordVisible {
-                        TextField("Steam password", text: $passwordInput)
-                    } else {
-                        SecureField("Steam password", text: $passwordInput)
-                    }
-                }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .tacticalTextField()
-            }
 
             if authSession.state == .expired, authSession.hasPersistedRefreshToken {
                 Button {
@@ -194,18 +160,15 @@ public struct SteamAuthCard: View {
             }
 
             Button {
-                Task {
-                    await authSession.signIn(accountName: accountNameInput, password: passwordInput)
-                    passwordInput = ""
-                }
+                Task { await authSession.signInViaQR() }
             } label: {
                 HStack(spacing: 8) {
                     if authSession.isBusy {
                         ProgressView().tint(AppTheme.Colors.textPrimary)
                     } else {
-                        Image(systemName: "lock.open.fill")
+                        Image(systemName: "qrcode")
                     }
-                    Text("SIGN IN TO STEAM")
+                    Text("SIGN IN WITH STEAM APP")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -214,9 +177,50 @@ public struct SteamAuthCard: View {
         }
     }
 
+    private var qrApprovalSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let url = authSession.pendingQRURL {
+                if let qrImage = makeQRImage(from: url) {
+                    Image(uiImage: qrImage)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 220, height: 220)
+                        .padding(10)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .frame(maxWidth: .infinity)
+                }
+
+                Text("Open the Steam mobile app → Steam Guard → tap the QR icon → scan this code, then approve the sign-in.")
+                    .font(AppTheme.Fonts.bodyRegular)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                busySection(label: "Preparing the QR code…")
+            }
+
+            HStack(spacing: 10) {
+                ProgressView().tint(AppTheme.Colors.ctBlue)
+                Text("Waiting for approval…")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                Spacer()
+            }
+
+            Button {
+                authSession.cancelPendingSignIn()
+            } label: {
+                Text("CANCEL")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.statusDanger))
+        }
+    }
+
     private var guardCodeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Steam sent a Steam Guard code to your email. Enter it to finish signing in.")
+            Text("Steam sent a Steam Guard code. Enter it to finish signing in.")
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -262,19 +266,7 @@ public struct SteamAuthCard: View {
         }
     }
 
-    private var remoteApprovalSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            busySection(label: "Waiting for approval in the Steam mobile app…")
-
-            Button {
-                authSession.cancelPendingSignIn()
-            } label: {
-                Text("CANCEL")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.statusDanger))
-        }
-    }
+    // MARK: - Pieces
 
     private func busySection(label: String) -> some View {
         HStack(spacing: 10) {
@@ -297,6 +289,14 @@ public struct SteamAuthCard: View {
                 .foregroundStyle(AppTheme.Colors.textPrimary)
                 .multilineTextAlignment(.trailing)
         }
+    }
+
+    private func tierBadge(_ number: String) -> some View {
+        Text(number)
+            .font(AppTheme.Fonts.captionMono)
+            .foregroundStyle(AppTheme.Colors.ctBlue)
+            .frame(width: 22, height: 22)
+            .background(Circle().fill(AppTheme.Colors.ctBlue.opacity(0.15)))
     }
 
     private func statusBanner(text: String, isError: Bool) -> some View {

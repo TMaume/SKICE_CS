@@ -122,8 +122,8 @@ public struct SettingsView: View {
         VStack(spacing: 14) {
             sectionTitle("CONNECTIONS")
             steamCard
-            SteamAuthCard(authSession: authSession)
             faceitCard
+            SteamAuthCard(authSession: authSession)
         }
     }
 
@@ -136,8 +136,15 @@ public struct SettingsView: View {
         }
     }
 
-    private func connectionHeader(title: String, subtitle: String, icon: String, isConnected: Bool) -> some View {
+    private func connectionHeader(title: String, subtitle: String, icon: String, isConnected: Bool, tier: String? = nil) -> some View {
         HStack(spacing: 10) {
+            if let tier {
+                Text(tier)
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.ctBlue)
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(AppTheme.Colors.ctBlue.opacity(0.15)))
+            }
             Image(systemName: icon)
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(isConnected ? AppTheme.Colors.statusSuccess : AppTheme.Colors.textSecondary)
@@ -162,7 +169,8 @@ public struct SettingsView: View {
                 title: "STEAM",
                 subtitle: sessionStore.storedSteamID64 != nil ? "Connected" : "Not connected",
                 icon: "person.fill",
-                isConnected: sessionStore.storedSteamID64 != nil
+                isConnected: sessionStore.storedSteamID64 != nil,
+                tier: "1"
             )
 
             Divider().overlay(AppTheme.Colors.borderSubtle)
@@ -319,7 +327,8 @@ public struct SettingsView: View {
                 title: "FACEIT",
                 subtitle: isFaceitConfigured ? "Connected" : "Optional",
                 icon: "flame.fill",
-                isConnected: isFaceitConfigured
+                isConnected: isFaceitConfigured,
+                tier: "2"
             )
 
             Divider().overlay(AppTheme.Colors.borderSubtle)
