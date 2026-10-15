@@ -4,6 +4,7 @@ public struct ContentView: View {
     public enum AppTab: Hashable {
         case profile
         case inventory
+        case stats
         case settings
     }
 
@@ -80,7 +81,16 @@ public struct ContentView: View {
             }
             .tag(AppTab.inventory)
 
-            // TAB 3: Minimal Settings (Hides Debug Tools unless Developer Mode is ON)
+            // TAB 3: CS2 & FACEIT Stats Dashboard (Module 4)
+            NavigationStack {
+                StatsDashboardView(steamID64: sessionStore.storedSteamID64)
+            }
+            .tabItem {
+                Label("Stats", systemImage: "chart.bar.doc.horizontal.fill")
+            }
+            .tag(AppTab.stats)
+
+            // TAB 4: Minimal Settings (Hides Debug Tools unless Developer Mode is ON)
             NavigationStack {
                 SettingsView()
             }
