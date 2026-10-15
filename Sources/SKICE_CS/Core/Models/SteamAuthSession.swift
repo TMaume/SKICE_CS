@@ -34,6 +34,9 @@ public final class SteamAuthSession {
     public private(set) var accessTokenExpiry: Date?
     /// The s.team challenge URL to render as a QR code during a QR sign-in.
     public private(set) var pendingQRURL: String?
+    /// True when Steam also allows approving the pending login in the mobile
+    /// app (an alternative to typing a Steam Guard code).
+    public private(set) var canApproveInApp: Bool = false
 
     // MARK: - Dependencies
 
@@ -177,20 +180,26 @@ public final class SteamAuthSession {
     }
 
     private func applyGuardState(for challenge: SteamAuthChallenge) {
-        // Remote approval first: QR logins offer device confirmation (approve
-        // in the app) alongside a device code, and approval is the intended path.
-        if challenge.confirmations.contains(where: { $0.kind.isRemoteApproval }) {
+        canApproveInApp = false
+
+        let hasCodeKind = challenge.confirmations.contains { $0.kind.requiresCodeEntry }
+        let hasRemoteApproval = challenge.confirmations.contains { $0.kind.isRemoteApproval }
+
+        // A typed Steam Guard code (email code, or the code the Steam app
+        // shows) is the most universal on-device path, so it takes priority.
+        if hasCodeKind {
+            state = .awaitingGuardCode
+            canApproveInApp = hasRemoteApproval
+            statusMessage = "Enter the Steam Guard code Steam sent, or the code shown in the Steam app."
+            DebugLogger.shared.info("SteamAuth waiting for a Steam Guard code", category: "SteamAuth")
+            return
+        }
+
+        if hasRemoteApproval {
             state = .awaitingRemoteApproval
             statusMessage = "Approve this sign-in in the Steam mobile app."
             DebugLogger.shared.info("SteamAuth waiting for a mobile app approval", category: "SteamAuth")
             startPolling()
-            return
-        }
-
-        if challenge.confirmations.contains(where: { $0.kind.requiresCodeEntry }) {
-            state = .awaitingGuardCode
-            statusMessage = "Steam sent a Steam Guard code. Enter it to finish signing in."
-            DebugLogger.shared.info("SteamAuth waiting for a Steam Guard code", category: "SteamAuth")
             return
         }
 
@@ -201,6 +210,16 @@ public final class SteamAuthSession {
 
         state = .awaitingGuardCode
         statusMessage = "Steam asked for a guard this app does not support. Try the Steam mobile app."
+    }
+
+    /// Switches a pending guard-code entry to in-app approval polling.
+    public func approveInAppInstead() {
+        guard pendingChallenge != nil else { return }
+        canApproveInApp = false
+        state = .awaitingRemoteApproval
+        statusMessage = "Approve this sign-in in the Steam mobile app."
+        DebugLogger.shared.info("SteamAuth switched to in-app approval", category: "SteamAuth")
+        startPolling()
     }
 
     /// Submits a typed Steam Guard code, then waits for the tokens.
@@ -298,6 +317,7 @@ public final class SteamAuthSession {
         pendingChallenge = nil
         guardOptions = []
         pendingQRURL = nil
+        canApproveInApp = false
         cancelPolling()
         reloadPersistedState()
 
@@ -371,6 +391,7 @@ public final class SteamAuthSession {
         pendingChallenge = nil
         guardOptions = []
         pendingQRURL = nil
+        canApproveInApp = false
         statusMessage = "Signed out. The stored Steam tokens were removed from the Keychain."
         errorMessage = nil
         reloadPersistedState()
@@ -383,6 +404,7 @@ public final class SteamAuthSession {
         pendingChallenge = nil
         guardOptions = []
         pendingQRURL = nil
+        canApproveInApp = false
         statusMessage = nil
         errorMessage = nil
         reloadPersistedState()

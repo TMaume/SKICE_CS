@@ -23,11 +23,11 @@ public struct SteamAuthCard: View {
     let authSession: SteamAuthSession
 
     private enum SignInMode: String, CaseIterable {
-        case qr = "QR CODE"
         case password = "PASSWORD"
+        case qr = "QR CODE"
     }
 
-    @State private var signInMode: SignInMode = .qr
+    @State private var signInMode: SignInMode = .password
     @State private var accountNameInput: String = ""
     @State private var passwordInput: String = ""
     @State private var isPasswordVisible: Bool = false
@@ -188,7 +188,7 @@ public struct SteamAuthCard: View {
 
     private var qrOption: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Scan a QR code with the Steam mobile app. Your password is never typed into this app.")
+            Text("Scan the QR code with the Steam mobile app on another device or screen. Your password is never typed into this app.")
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -213,7 +213,7 @@ public struct SteamAuthCard: View {
 
     private var passwordOption: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sign in with your Steam account name and password. The password is used once to obtain tokens and is never stored.")
+            Text("Sign in with your Steam account name and password, then enter your Steam Guard code when Steam asks for it. The password is used once and never stored.")
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -341,7 +341,7 @@ public struct SteamAuthCard: View {
 
     private var guardCodeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Steam sent a Steam Guard code. Enter it to finish signing in.")
+            Text("Steam needs a Steam Guard code (from your email or the Steam app). Enter it to finish signing in.")
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -383,6 +383,19 @@ public struct SteamAuthCard: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.statusDanger))
+            }
+
+            if authSession.canApproveInApp {
+                Button {
+                    authSession.approveInAppInstead()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "iphone")
+                        Text("APPROVE IN STEAM APP INSTEAD")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.ctBlue))
             }
         }
     }
