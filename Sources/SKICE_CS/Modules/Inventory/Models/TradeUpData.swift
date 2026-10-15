@@ -95,81 +95,25 @@ public extension SkinExterior {
     }
 }
 
-// MARK: - Local catalog (curated, illustrative subset — no third-party API)
+// MARK: - Catalog
 
-private func catalogItem(_ weapon: String, _ skin: String, _ rarity: SkinRarity) -> TradeUpItem {
-    TradeUpItem(weaponName: weapon, skinName: skin, rarity: rarity)
-}
-
-/// Static, Codable trade-up catalog. This is a curated representative subset of
-/// popular CS2 collections for simulation purposes — not an exhaustive Valve dataset.
+/// Static trade-up catalog. The collection/item data is embedded as JSON
+/// (generated from ByMykel/CSGO-API skins.json) and decoded once, lazily, on
+/// first use. The app performs no network access for this data.
 public enum TradeUpCatalog {
-    public static let collections: [TradeUpCollection] = [
-        TradeUpCollection(id: "phoenix", name: "The Phoenix Collection", minFloat: 0.00, maxFloat: 0.80, items: [
-            catalogItem("AWP", "Asiimov", .covert),
-            catalogItem("AUG", "Chameleon", .classified),
-            catalogItem("AK-47", "Redline", .restricted),
-            catalogItem("P90", "Trigon", .restricted),
-            catalogItem("AWP", "Electric Hive", .restricted),
-            catalogItem("USP-S", "Guardian", .milSpec),
-            catalogItem("Negev", "Terrain", .milSpec),
-            catalogItem("P250", "Undertow", .milSpec)
-        ]),
-
-        TradeUpCollection(id: "chroma2", name: "The Chroma 2 Collection", minFloat: 0.00, maxFloat: 0.80, items: [
-            catalogItem("M4A1-S", "Hyper Beast", .covert),
-            catalogItem("AWP", "Hyper Beast", .covert),
-            catalogItem("AWP", "Man-o'-war", .classified),
-            catalogItem("AK-47", "Elite Build", .restricted),
-            catalogItem("P250", "Valence", .restricted),
-            catalogItem("MAC-10", "Neon Rider", .milSpec),
-            catalogItem("MP9", "Ruby Poison", .milSpec)
-        ]),
-
-        TradeUpCollection(id: "spectrum", name: "The Spectrum Collection", minFloat: 0.00, maxFloat: 0.80, items: [
-            catalogItem("AK-47", "Bloodsport", .covert),
-            catalogItem("AWP", "Fever Dream", .covert),
-            catalogItem("M4A1-S", "Golden Coil", .classified),
-            catalogItem("CZ75-Auto", "Xiangliu", .classified),
-            catalogItem("UMP-45", "Primal Saber", .restricted),
-            catalogItem("SG 553", "Flashback", .restricted),
-            catalogItem("PP-Bizon", "Judgement of Anubis", .milSpec)
-        ]),
-
-        TradeUpCollection(id: "dangerzone", name: "The Danger Zone Collection", minFloat: 0.00, maxFloat: 0.80, items: [
-            catalogItem("AK-47", "Asiimov", .covert),
-            catalogItem("AWP", "Neo-Noir", .covert),
-            catalogItem("Desert Eagle", "Mecha Industries", .restricted),
-            catalogItem("M4A4", "Neo-Noir", .restricted),
-            catalogItem("P250", "Asiimov", .milSpec),
-            catalogItem("UMP-45", "Momentum", .milSpec)
-        ]),
-
-        TradeUpCollection(id: "fracture", name: "The Fracture Collection", minFloat: 0.00, maxFloat: 0.80, items: [
-            catalogItem("M4A1-S", "Printstream", .covert),
-            catalogItem("AWP", "Exoskeleton", .covert),
-            catalogItem("AK-47", "Legion of Anubis", .classified),
-            catalogItem("Glock-18", "Vogue", .classified),
-            catalogItem("P250", "Cyber Shell", .restricted),
-            catalogItem("XM1014", "Incinegator", .restricted)
-        ]),
-
-        TradeUpCollection(id: "prisma2", name: "The Prisma 2 Collection", minFloat: 0.00, maxFloat: 0.80, items: [
-            catalogItem("AWP", "Chromatic Aberration", .covert),
-            catalogItem("M4A4", "The Emperor", .covert),
-            catalogItem("AK-47", "Phantom Disruptor", .classified),
-            catalogItem("MP7", "Bloodsport", .classified),
-            catalogItem("Desert Eagle", "Printstream", .restricted),
-            catalogItem("MP9", "Hypnotic", .restricted),
-            catalogItem("P250", "Nevermore", .milSpec)
-        ])
-    ]
+    /// Every CS2 collection with its Consumer..Covert weapon skins.
+    public static let collections: [TradeUpCollection] = {
+        guard let data = TradeUpCatalogData.json.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([TradeUpCollection].self, from: data)) ?? []
+    }()
 
     /// Finds a collection by display name or slug (case-insensitive).
     public static func collection(named name: String) -> TradeUpCollection? {
-        collections.first {
-            $0.name.caseInsensitiveCompare(name) == .orderedSame
-                || $0.id.caseInsensitiveCompare(name) == .orderedSame
+        let key = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        return collections.first {
+            $0.name.caseInsensitiveCompare(key) == .orderedSame
+                || $0.id.caseInsensitiveCompare(key) == .orderedSame
         }
     }
 }

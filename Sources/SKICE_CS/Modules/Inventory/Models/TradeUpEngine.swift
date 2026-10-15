@@ -66,6 +66,36 @@ public struct TradeUpOutcome: Identifiable, Sendable, Hashable {
     }
 }
 
+/// Result of evaluating a contract: the resolved outcomes plus bookkeeping for
+/// majority collections the local catalog could not resolve.
+public struct TradeUpEvaluation: Sendable {
+    public let outputRarity: SkinRarity
+    public let isStatTrakOutput: Bool
+    public let majorityCollections: [String]
+    public let resolvedCollections: [String]
+    public let unresolvedCollections: [String]
+    public let outcomes: [TradeUpOutcome]
+
+    public var hasOutcomes: Bool { !outcomes.isEmpty }
+    public var isFullyResolved: Bool { unresolvedCollections.isEmpty }
+
+    public init(
+        outputRarity: SkinRarity,
+        isStatTrakOutput: Bool,
+        majorityCollections: [String],
+        resolvedCollections: [String],
+        unresolvedCollections: [String],
+        outcomes: [TradeUpOutcome]
+    ) {
+        self.outputRarity = outputRarity
+        self.isStatTrakOutput = isStatTrakOutput
+        self.majorityCollections = majorityCollections
+        self.resolvedCollections = resolvedCollections
+        self.unresolvedCollections = unresolvedCollections
+        self.outcomes = outcomes
+    }
+}
+
 /// Pure, deterministic engine for the CS2 Trade-Up Contract rules.
 /// No network access — collection data and probabilities are computed locally.
 public enum TradeUpEngine {
@@ -79,8 +109,7 @@ public enum TradeUpEngine {
         case mixedStatTrak
         case souvenirPresent
         case notTradeUpAble(SkinRarity)
-        case unknownCollection(String)
-        case noOutputItems(collection: String, rarity: SkinRarity)
+        case missingCollection
 
         public var errorDescription: String? {
             switch self {
@@ -94,16 +123,14 @@ public enum TradeUpEngine {
                 return "Souvenir items cannot be used in a Trade-Up Contract."
             case .notTradeUpAble(let rarity):
                 return "\(rarity.rawValue) items cannot be traded up."
-            case .unknownCollection(let name):
-                return "Collection \"\(name)\" is not in the local catalog."
-            case .noOutputItems(let collection, let rarity):
-                return "Collection \"\(collection)\" has no \(rarity.rawValue) outputs."
+            case .missingCollection:
+                return "Some items have no collection tag and cannot be traded up."
             }
         }
     }
 
     /// Evaluates a trade-up and returns every possible outcome with its probability,
-    /// sorted most-likely first. Throws TradeUpError on invalid input.
+    /// sorted most-likely first. Throws TradeUpError only on hard rule violations.
     ///
     /// Valve rules implemented:
     /// - 10 items of the same rarity R → 1 item of rarity R+1.
@@ -114,7 +141,10 @@ public enum TradeUpEngine {
     ///   min/max float bounds, then mapped back onto the output collection's bounds.
     /// - StatTrak: all-StatTrak → StatTrak output; all non-StatTrak → non-StatTrak.
     /// - Souvenir items are rejected.
-    public static func evaluate(_ inputs: [TradeUpInput]) throws -> [TradeUpOutcome] {
+    ///
+    /// Majority collections that are missing from the local catalog are reported
+    /// in unresolvedCollections rather than treated as an error.
+    public static func evaluate(_ inputs: [TradeUpInput]) throws -> TradeUpEvaluation {
         guard inputs.count == contractSize else {
             throw TradeUpError.wrongCount(inputs.count)
         }
@@ -131,6 +161,10 @@ public enum TradeUpEngine {
             throw TradeUpError.souvenirPresent
         }
 
+        guard !inputs.contains(where: { $0.collectionName.isEmpty }) else {
+            throw TradeUpError.missingCollection
+        }
+
         let statTrakCount = inputs.filter(\.isStatTrak).count
         guard statTrakCount == 0 || statTrakCount == contractSize else {
             throw TradeUpError.mixedStatTrak
@@ -143,7 +177,7 @@ public enum TradeUpEngine {
             counts[input.collectionName, default: 0] += 1
         }
         let maxCount = counts.values.max() ?? 0
-        let majorityNames = counts.filter { $0.value == maxCount }.map(\.key)
+        let majorityNames = counts.filter { $0.value == maxCount }.map(\.key).sorted()
         let tieCount = majorityNames.count
 
         // Normalize each input float within its collection's [min, max] bounds,
@@ -158,14 +192,20 @@ public enum TradeUpEngine {
         let avgNormalized = normalizedValues.reduce(0, +) / Double(normalizedValues.count)
 
         var outcomes: [TradeUpOutcome] = []
+        var resolved: [String] = []
+        var unresolved: [String] = []
+
         for name in majorityNames {
             guard let collection = TradeUpCatalog.collection(named: name) else {
-                throw TradeUpError.unknownCollection(name)
+                unresolved.append(name)
+                continue
             }
             let outputItems = collection.items(ofRarity: outputRarity)
             guard !outputItems.isEmpty else {
-                throw TradeUpError.noOutputItems(collection: collection.name, rarity: outputRarity)
+                unresolved.append(name)
+                continue
             }
+            resolved.append(name)
 
             // Each tied-majority collection is equally likely; each of its
             // R+1 items is equally likely within that collection.
@@ -187,24 +227,36 @@ public enum TradeUpEngine {
             }
         }
 
-        return outcomes.sorted { lhs, rhs in
+        let sorted = outcomes.sorted { lhs, rhs in
             if lhs.probability != rhs.probability { return lhs.probability > rhs.probability }
             return lhs.item.displayName < rhs.item.displayName
         }
+
+        return TradeUpEvaluation(
+            outputRarity: outputRarity,
+            isStatTrakOutput: isStatTrakOutput,
+            majorityCollections: majorityNames,
+            resolvedCollections: resolved,
+            unresolvedCollections: unresolved,
+            outcomes: sorted
+        )
     }
 
-    /// True when an inventory item could legitimately serve as a trade-up input
-    /// for this simulator: same-tier collection present in the catalog, with at
-    /// least one R+1 output, and not souvenir / not a knife-or-gloves special item.
+    /// True when an inventory item can serve as a trade-up input: a weapon skin
+    /// of a trade-up-able rarity, carrying a collection tag, and not a souvenir,
+    /// knife or glove. The collection does not have to be in the local catalog —
+    /// such contracts are reported as unresolved rather than hidden.
     public static func isEligible(_ item: SkinItem) -> Bool {
         guard item.rarity.isTradeUpInputEligible else { return false }
         guard !item.isSouvenir, !item.isMeleeOrGloves else { return false }
-        guard let collectionName = item.collectionName,
-              let collection = TradeUpCatalog.collection(named: collectionName),
-              let outputRarity = item.rarity.nextTradeUpRarity,
-              !collection.items(ofRarity: outputRarity).isEmpty else {
-            return false
-        }
-        return true
+        guard let collection = item.collectionName, !collection.isEmpty else { return false }
+
+        let category = item.categoryType.lowercased()
+        let excluded = [
+            "agent", "sticker", "container", "music", "graffiti",
+            "collectible", "patch", "key", "tag", "tool", "gift",
+            "case", "capsule", "spray", "pass", "coin", "medal"
+        ]
+        return !excluded.contains { category.contains($0) }
     }
 }

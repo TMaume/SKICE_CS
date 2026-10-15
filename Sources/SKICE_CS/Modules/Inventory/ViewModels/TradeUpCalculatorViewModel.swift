@@ -24,10 +24,12 @@ public final class TradeUpCalculatorViewModel {
     }
 
     public private(set) var selectedItems: [SkinItem] = []
+    public private(set) var evaluation: TradeUpEvaluation?
     public private(set) var outcomes: [TradeUpOutcome] = []
     public private(set) var outcomePrices: [String: PriceEntry] = [:]
     public private(set) var isLoadingPrices = false
     public private(set) var lastError: String?
+    public private(set) var notice: String?
 
     // MARK: - Dependencies
 
@@ -97,16 +99,31 @@ public final class TradeUpCalculatorViewModel {
     private func refreshOutcomes() {
         outcomes = []
         outcomePrices = [:]
+        evaluation = nil
+        notice = nil
         lastError = nil
         guard canEvaluate else { return }
 
         let inputs = selectedItems.map(TradeUpInput.init(item:))
+        let eval: TradeUpEvaluation
         do {
-            outcomes = try TradeUpEngine.evaluate(inputs)
+            eval = try TradeUpEngine.evaluate(inputs)
         } catch {
             lastError = error.localizedDescription
             return
         }
+
+        evaluation = eval
+        outcomes = eval.outcomes
+
+        if !eval.isFullyResolved {
+            let names = eval.unresolvedCollections.joined(separator: ", ")
+            notice = eval.hasOutcomes
+                ? "Partial data: \(names) not in the local catalog (excluded from EV)."
+                : "Output pool for \(names) is not in the local catalog — showing input cost only."
+        }
+
+        guard eval.hasOutcomes else { return }
         Task { await loadOutcomePrices() }
     }
 

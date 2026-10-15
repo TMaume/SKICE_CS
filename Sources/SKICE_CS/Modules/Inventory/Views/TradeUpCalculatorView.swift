@@ -35,6 +35,9 @@ public struct TradeUpCalculatorView: View {
                             selectionHeader
                             itemGrid
                             if viewModel.canEvaluate {
+                                if let notice = viewModel.notice {
+                                    noticeBanner(notice)
+                                }
                                 resultsSection
                             } else if let error = viewModel.lastError {
                                 errorBanner(error)
@@ -246,6 +249,22 @@ public struct TradeUpCalculatorView: View {
         )
     }
 
+    private func noticeBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(AppTheme.Colors.ctBlue)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppTheme.Colors.ctBlue.opacity(0.12))
+        )
+    }
+
     private var disclaimer: some View {
         Text("Simulation indicative — Steam Market prices in EUR (median ?? lowest listing).")
             .font(.system(size: 10))
@@ -306,6 +325,31 @@ private struct TradeUpInputCard: View {
                         .font(.system(size: 16))
                         .foregroundStyle(isSelected ? AppTheme.Colors.statusSuccess : AppTheme.Colors.textSecondary)
                 }
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(rarityColor.opacity(0.12))
+                    AsyncImage(url: item.iconURL) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                                .controlSize(.small)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                        case .failure:
+                            Image(systemName: "photo")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .padding(4)
+                }
+                .frame(height: 58)
+                .frame(maxWidth: .infinity)
 
                 Text(item.weaponName ?? item.categoryType)
                     .font(.caption2.weight(.semibold))
