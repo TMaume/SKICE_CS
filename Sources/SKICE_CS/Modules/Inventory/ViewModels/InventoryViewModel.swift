@@ -46,8 +46,15 @@ public final class InventoryViewModel {
 
     private let service: SteamInventoryServicing
 
-    public init(service: SteamInventoryServicing = SteamInventoryService()) {
+    /// Shared Steam Market price store for the items in this inventory.
+    public let priceStore: PriceStore
+
+    public init(
+        service: SteamInventoryServicing = SteamInventoryService(),
+        priceStore: PriceStore = PriceStore()
+    ) {
         self.service = service
+        self.priceStore = priceStore
     }
 
     // MARK: - Cached Derived State
@@ -157,6 +164,28 @@ public final class InventoryViewModel {
         }
 
         isLoading = false
+
+        // Prices load separately (cached ~24h) so the inventory renders first.
+        // Run in an unstructured Task: a pull-to-refresh teardown or tab switch
+        // cancels THIS (.task/.refreshable) task, which must not kill the price
+        // fetch mid-flight.
+        if !items.isEmpty {
+            let snapshot = items
+            let store = priceStore
+            Task { await store.loadPrices(for: snapshot) }
+        }
+    }
+
+    // MARK: - Pricing
+
+    /// Steam Market price for an item, or nil when unpriced (shown as "—").
+    public func price(for item: SkinItem) -> PriceEntry? {
+        priceStore.entry(for: item)
+    }
+
+    /// Aggregate Steam Market value of the current inventory.
+    public var portfolioValue: PortfolioValue {
+        priceStore.portfolioValue(for: items)
     }
 
     /// Resets all active search and category filters.

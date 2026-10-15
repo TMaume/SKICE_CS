@@ -103,9 +103,31 @@ public struct ProfileView: View {
                             .font(AppTheme.Fonts.captionMono)
                             .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
+
+                    if let errorMessage = sessionStore.errorMessage {
+                        Text(errorMessage)
+                            .font(AppTheme.Fonts.captionMono)
+                            .foregroundStyle(AppTheme.Colors.statusDanger)
+                            .lineLimit(2)
+                    }
                 }
 
                 Spacer()
+
+                Button {
+                    Task { await sessionStore.syncProfileFromSteamWebAPI() }
+                } label: {
+                    if sessionStore.isLoadingNetwork {
+                        ProgressView()
+                            .tint(AppTheme.Colors.csOrange)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.Colors.csOrange)
+                    }
+                }
+                .disabled(sessionStore.isLoadingNetwork)
+                .accessibilityLabel("Sync Steam Profile")
             }
             .tacticalCard(accentBorder: AppTheme.Colors.ctBlue.opacity(0.4))
         } else {

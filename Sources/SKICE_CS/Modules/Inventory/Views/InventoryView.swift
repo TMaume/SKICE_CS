@@ -30,6 +30,7 @@ public struct InventoryView: View {
             VStack(spacing: 0) {
                 if !viewModel.items.isEmpty {
                     summaryHeaderBar
+                    portfolioValueBar
                     filterControlBar
                 }
 
@@ -78,7 +79,7 @@ public struct InventoryView: View {
             }
         }
         .sheet(item: $selectedItemForDetail) { item in
-            SkinDetailSheet(item: item)
+            SkinDetailSheet(item: item, price: viewModel.price(for: item))
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -133,6 +134,39 @@ public struct InventoryView: View {
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(color)
         }
+    }
+
+    private var portfolioValueBar: some View {
+        let value = viewModel.portfolioValue
+
+        return HStack(spacing: 10) {
+            Image(systemName: "eurosign.circle.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppTheme.Colors.csOrange)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("MARKET VALUE")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                Text(value.pricedCount > 0 ? PriceFormatter.eur(value.total) : "—")
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(value.pricedCount)/\(value.totalCount) items priced")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Text(viewModel.priceStore.isLoading ? "Loading Steam prices…" : "Steam Market · EUR")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(white: 0.06))
     }
 
     private var filterControlBar: some View {
@@ -320,7 +354,7 @@ public struct InventoryView: View {
                 if isGridView {
                     LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(viewModel.filteredItems) { item in
-                            SkinGridCard(item: item)
+                            SkinGridCard(item: item, price: viewModel.price(for: item))
                                 .onTapGesture {
                                     selectedItemForDetail = item
                                 }
@@ -330,7 +364,7 @@ public struct InventoryView: View {
                 } else {
                     LazyVStack(spacing: 8) {
                         ForEach(viewModel.filteredItems) { item in
-                            SkinListRow(item: item)
+                            SkinListRow(item: item, price: viewModel.price(for: item))
                                 .onTapGesture {
                                     selectedItemForDetail = item
                                 }
@@ -410,6 +444,7 @@ public struct InventoryView: View {
 
 private struct SkinGridCard: View {
     let item: SkinItem
+    let price: PriceEntry?
 
     private var rarityColor: Color {
         AppTheme.rarityColor(for: item.rarity, hexOverride: item.rarityColorHex)
@@ -417,6 +452,11 @@ private struct SkinGridCard: View {
 
     private var tradeBadgeColor: Color {
         AppTheme.tradeStatusColor(for: item.tradeStatus)
+    }
+
+    private var priceText: String {
+        guard let price else { return "—" }
+        return PriceFormatter.eur(price.displayValue)
     }
 
     var body: some View {
@@ -534,6 +574,14 @@ private struct SkinGridCard: View {
             RoundedRectangle(cornerRadius: 2)
                 .fill(rarityColor)
                 .frame(height: 3)
+
+            HStack(spacing: 4) {
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 8, weight: .bold))
+                Text(priceText)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            }
+            .foregroundStyle(price == nil ? AppTheme.Colors.textSecondary : AppTheme.Colors.statusSuccess)
         }
         .padding(10)
         .background(
@@ -556,6 +604,7 @@ private struct SkinGridCard: View {
 
 private struct SkinListRow: View {
     let item: SkinItem
+    let price: PriceEntry?
 
     private var rarityColor: Color {
         AppTheme.rarityColor(for: item.rarity, hexOverride: item.rarityColorHex)
@@ -563,6 +612,11 @@ private struct SkinListRow: View {
 
     private var tradeBadgeColor: Color {
         AppTheme.tradeStatusColor(for: item.tradeStatus)
+    }
+
+    private var priceText: String {
+        guard let price else { return "—" }
+        return PriceFormatter.eur(price.displayValue)
     }
 
     var body: some View {
@@ -628,14 +682,20 @@ private struct SkinListRow: View {
 
             Spacer()
 
-            if let shortCode = item.exterior.shortCode {
-                Text(shortCode)
-                    .font(.caption.weight(.bold).monospaced())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(AppTheme.exteriorColor(for: item.exterior).opacity(0.2))
-                    .foregroundStyle(AppTheme.exteriorColor(for: item.exterior))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(priceText)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(price == nil ? AppTheme.Colors.textSecondary : .white)
+
+                if let shortCode = item.exterior.shortCode {
+                    Text(shortCode)
+                        .font(.caption.weight(.bold).monospaced())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.exteriorColor(for: item.exterior).opacity(0.2))
+                        .foregroundStyle(AppTheme.exteriorColor(for: item.exterior))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
             }
         }
         .padding(10)
@@ -650,6 +710,7 @@ private struct SkinListRow: View {
 
 private struct SkinDetailSheet: View {
     let item: SkinItem
+    let price: PriceEntry?
     @Environment(\.dismiss) private var dismiss
     @AppStorage("isDeveloperModeEnabled") private var isDeveloperModeEnabled: Bool = false
     @State private var isShowingMarketSheet: Bool = false
@@ -720,6 +781,19 @@ private struct SkinDetailSheet: View {
                             valueColor: AppTheme.tradeStatusColor(for: item.tradeStatus)
                         )
 
+                        detailRow(
+                            label: "Steam Price (min)",
+                            value: price.map { PriceFormatter.eur($0.lowest) } ?? "—",
+                            valueColor: price == nil ? AppTheme.Colors.textSecondary : .white,
+                            isMonospaced: price != nil
+                        )
+                        detailRow(
+                            label: "Steam Price (median)",
+                            value: price?.median.map { PriceFormatter.eur($0) } ?? "—",
+                            valueColor: price?.median == nil ? AppTheme.Colors.textSecondary : .white,
+                            isMonospaced: price?.median != nil
+                        )
+
                         Button {
                             isShowingMarketSheet = true
                         } label: {
@@ -749,6 +823,11 @@ private struct SkinDetailSheet: View {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color(white: 0.1))
                     )
+
+                    Text("Steam Community Market prices in EUR — lowest listing and median sale price.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
                 .padding(20)
             }
