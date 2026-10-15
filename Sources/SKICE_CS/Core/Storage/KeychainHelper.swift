@@ -1,15 +1,15 @@
 import Foundation
 import Security
 
-/// Clés identifiant les secrets stockés localement dans le Keychain iOS.
+/// Keys identifying user secrets stored locally in the iOS Keychain.
 public enum KeychainKey: String, CaseIterable, Sendable {
     case steamID64 = "com.skice.cs2.keychain.steamid64"
-    case steamWebAPIKey = "com.skice.cs2.keychain.steamwebapikey"
+    case webAPIKey = "com.skice.cs2.keychain.webapikey"
     case steamRefreshToken = "com.skice.cs2.keychain.steamrefreshtoken"
     case faceitAPIKey = "com.skice.cs2.keychain.faceitapikey"
 }
 
-/// Erreurs typées liées aux opérations du Keychain iOS.
+/// Typed errors for iOS Keychain operations.
 public enum KeychainError: LocalizedError, Sendable, Equatable {
     case encodingFailed
     case decodingFailed
@@ -19,19 +19,19 @@ public enum KeychainError: LocalizedError, Sendable, Equatable {
     public var errorDescription: String? {
         switch self {
         case .encodingFailed:
-            return "Impossible d'encoder la donnée en UTF-8 pour le Keychain."
+            return "Failed to encode string data to UTF-8 for Keychain storage."
         case .decodingFailed:
-            return "Impossible de décoder la donnée issue du Keychain."
+            return "Failed to decode data retrieved from the Keychain."
         case .itemNotFound:
-            return "Aucune entrée trouvée dans le trousseau sécurisé."
+            return "Requested credential was not found in the local Keychain."
         case .unexpectedStatus(let status):
-            return "Erreur système Keychain iOS (OSStatus : \(status))."
+            return "iOS Keychain system error (OSStatus: \(status))."
         }
     }
 }
 
-/// Gestionnaire de stockage sécurisé local utilisant les API natives Security d'iOS.
-/// Garantit une architecture Zero-Trust : aucun secret ne quitte l'appareil vers un backend tiers.
+/// Thread-safe, Zero-Trust local credential manager backed by iOS Keychain Services.
+/// Credentials never leave the device toward any intermediate backend server.
 public struct KeychainHelper: Sendable {
     public static let shared = KeychainHelper()
 
@@ -39,9 +39,9 @@ public struct KeychainHelper: Sendable {
 
     private init() {}
 
-    // MARK: - Opérations génériques CRUD
+    // MARK: - CRUD Operations
 
-    /// Sauvegarde ou met à jour une chaîne de caractères dans le Keychain iOS.
+    /// Saves or updates a string value in the local iOS Keychain.
     public func save(_ value: String, for key: KeychainKey) throws {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let data = trimmed.data(using: .utf8) else {
@@ -54,9 +54,9 @@ public struct KeychainHelper: Sendable {
             kSecAttrAccount as String: key.rawValue
         ]
 
-        let statusCheck = SecItemCopyMatching(baseQuery as CFDictionary, nil)
+        let existingStatus = SecItemCopyMatching(baseQuery as CFDictionary, nil)
 
-        switch statusCheck {
+        switch existingStatus {
         case errSecSuccess:
             let attributesToUpdate: [String: Any] = [
                 kSecValueData as String: data
@@ -70,21 +70,21 @@ public struct KeychainHelper: Sendable {
             }
 
         case errSecItemNotFound:
-            var newItemQuery = baseQuery
-            newItemQuery[kSecValueData as String] = data
-            newItemQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            var addQuery = baseQuery
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
-            let addStatus = SecItemAdd(newItemQuery as CFDictionary, nil)
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else {
                 throw KeychainError.unexpectedStatus(addStatus)
             }
 
         default:
-            throw KeychainError.unexpectedStatus(statusCheck)
+            throw KeychainError.unexpectedStatus(existingStatus)
         }
     }
 
-    /// Lit une chaîne de caractères depuis le Keychain iOS pour une clé donnée.
+    /// Reads a string value from the local iOS Keychain for the specified key.
     public func read(for key: KeychainKey) throws -> String {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -113,7 +113,7 @@ public struct KeychainHelper: Sendable {
         return stringValue
     }
 
-    /// Vérifie si une valeur existe dans le Keychain pour la clé spécifiée.
+    /// Checks whether a value exists in the Keychain for the given key.
     public func exists(for key: KeychainKey) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -124,7 +124,7 @@ public struct KeychainHelper: Sendable {
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
-    /// Supprime une entrée spécifique du Keychain iOS.
+    /// Deletes a specific key from the iOS Keychain.
     public func delete(for key: KeychainKey) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -138,7 +138,7 @@ public struct KeychainHelper: Sendable {
         }
     }
 
-    /// Purge l'intégralité des secrets SKICE_CS stockés dans le Keychain local.
+    /// Removes all SKICE_CS credentials from the local Keychain.
     public func clearAll() throws {
         for key in KeychainKey.allCases {
             try delete(for: key)

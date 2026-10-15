@@ -5,6 +5,9 @@ public struct ContentView: View {
     @State private var steamIDInput: String = ""
     @State private var apiKeyInput: String = ""
     @State private var isAPIKeyVisible: Bool = false
+    @State private var isShowingSteamAPIKeyPortal: Bool = false
+
+    private static let steamAPIKeyPortalURL = URL(string: "https://steamcommunity.com/dev/apikey")!
 
     public init() {}
 
@@ -15,19 +18,19 @@ public struct ContentView: View {
 
     private var isAPIKeyValid: Bool? {
         guard !apiKeyInput.isEmpty else { return nil }
-        return SteamCredentialsValidator.isValidSteamAPIKey(apiKeyInput)
+        return SteamCredentialsValidator.isValidWebAPIKey(apiKeyInput)
     }
 
     public var body: some View {
         NavigationStack {
             ZStack {
-                CSTheme.Colors.oledBlack
+                AppTheme.Colors.oledBlack
                     .ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 18) {
                         headerBanner
-                        securityStatusCard
+                        keychainStatusCard
                         profileSummaryCard
                         credentialsFormCard
                     }
@@ -38,101 +41,105 @@ public struct ContentView: View {
             .navigationTitle("SKICE // CS2")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(CSTheme.Colors.oledBlack, for: .navigationBar)
+            .toolbarBackground(AppTheme.Colors.oledBlack, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .onAppear {
                 if let savedID = sessionStore.storedSteamID64 {
                     steamIDInput = savedID
                 }
             }
+            .sheet(isPresented: $isShowingSteamAPIKeyPortal) {
+                SafariView(url: Self.steamAPIKeyPortalURL)
+                    .ignoresSafeArea()
+            }
         }
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - Sous-vues
+    // MARK: - Subviews
 
     private var headerBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("PHASE 1 : SOCLE & KEYCHAIN", systemImage: "shield.lefthalf.filled.badge.checkmark")
-                    .font(CSTheme.Fonts.captionMono)
-                    .foregroundStyle(CSTheme.Colors.accentCSOrange)
+                Label("PHASE 1 : CORE & KEYCHAIN", systemImage: "shield.lefthalf.filled.badge.checkmark")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.csOrange)
 
                 Spacer()
 
                 Text("ZERO-TRUST")
-                    .font(CSTheme.Fonts.captionMono)
+                    .font(AppTheme.Fonts.captionMono)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(CSTheme.Colors.statusSafe.opacity(0.15))
-                    .foregroundStyle(CSTheme.Colors.statusSafe)
+                    .background(AppTheme.Colors.statusSuccess.opacity(0.15))
+                    .foregroundStyle(AppTheme.Colors.statusSuccess)
                     .clipShape(Capsule())
             }
 
-            Text("AUTHENTIFICATION LOCALE STEAM")
-                .font(CSTheme.Fonts.headerTitle)
-                .foregroundStyle(CSTheme.Colors.textPrimary)
+            Text("LOCAL STEAM AUTHENTICATION")
+                .font(AppTheme.Fonts.headerTitle)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
 
-            Text("Vos clés et identifiants sont stockés exclusivement dans le trousseau matériel iOS. Aucune donnée ne transite par un serveur tiers.")
-                .font(CSTheme.Fonts.bodyRegular)
-                .foregroundStyle(CSTheme.Colors.textSecondary)
+            Text("Your SteamID64 and optional Web API Key are stored exclusively in the iOS hardware Keychain. No intermediate server ever accesses your credentials.")
+                .font(AppTheme.Fonts.bodyRegular)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(CSTheme.Colors.tacticalHeaderGradient)
+        .background(AppTheme.Colors.headerGradient)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(CSTheme.Colors.borderSubtle, lineWidth: 1)
+                .stroke(AppTheme.Colors.borderSubtle, lineWidth: 1)
         )
     }
 
-    private var securityStatusCard: some View {
+    private var keychainStatusCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("ÉTAT DU TROUSSEAU KEYCHAIN")
-                    .font(CSTheme.Fonts.sectionTitle)
-                    .foregroundStyle(CSTheme.Colors.accentCTBlue)
+                Text("KEYCHAIN VAULT STATUS")
+                    .font(AppTheme.Fonts.sectionTitle)
+                    .foregroundStyle(AppTheme.Colors.ctBlue)
                 Spacer()
                 Circle()
-                    .fill(sessionStore.storedSteamID64 != nil ? CSTheme.Colors.statusSafe : CSTheme.Colors.accentCSOrange)
+                    .fill(sessionStore.storedSteamID64 != nil ? AppTheme.Colors.statusSuccess : AppTheme.Colors.csOrange)
                     .frame(width: 9, height: 9)
             }
 
             Divider()
-                .overlay(CSTheme.Colors.borderSubtle)
+                .overlay(AppTheme.Colors.borderSubtle)
 
             HStack {
-                Text("SteamID64 stocké :")
-                    .font(CSTheme.Fonts.bodyRegular)
-                    .foregroundStyle(CSTheme.Colors.textSecondary)
+                Text("Stored SteamID64:")
+                    .font(AppTheme.Fonts.bodyRegular)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
                 Spacer()
-                Text(sessionStore.storedSteamID64 ?? "NON CONFIGURÉ")
-                    .font(CSTheme.Fonts.metricMono)
+                Text(sessionStore.storedSteamID64 ?? "NOT CONFIGURED")
+                    .font(AppTheme.Fonts.metricMono)
                     .foregroundStyle(
                         sessionStore.storedSteamID64 != nil
-                            ? CSTheme.Colors.statusSafe
-                            : CSTheme.Colors.textSecondary
+                            ? AppTheme.Colors.statusSuccess
+                            : AppTheme.Colors.textSecondary
                     )
             }
 
             HStack {
-                Text("Clé Steam Web API :")
-                    .font(CSTheme.Fonts.bodyRegular)
-                    .foregroundStyle(CSTheme.Colors.textSecondary)
+                Text("Steam Web API Key:")
+                    .font(AppTheme.Fonts.bodyRegular)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
                 Spacer()
-                Text(sessionStore.maskedAPIKey ?? "AUCUNE CLÉ")
-                    .font(CSTheme.Fonts.captionMono)
+                Text(sessionStore.maskedAPIKey ?? "PUBLIC ENDPOINTS ONLY")
+                    .font(AppTheme.Fonts.captionMono)
                     .foregroundStyle(
                         sessionStore.hasStoredAPIKey
-                            ? CSTheme.Colors.accentCSOrange
-                            : CSTheme.Colors.textSecondary
+                            ? AppTheme.Colors.csOrange
+                            : AppTheme.Colors.textSecondary
                     )
             }
         }
-        .csTacticalCard(
+        .tacticalCard(
             accentBorder: sessionStore.storedSteamID64 != nil
-                ? CSTheme.Colors.statusSafe.opacity(0.45)
+                ? AppTheme.Colors.statusSuccess.opacity(0.45)
                 : nil
         )
     }
@@ -144,7 +151,7 @@ public struct ContentView: View {
                 HStack(spacing: 12) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(CSTheme.Colors.surfaceElevated)
+                            .fill(AppTheme.Colors.gunmetalElevated)
                             .frame(width: 54, height: 54)
 
                         if let avatarURL = profile.avatarFullURL {
@@ -157,7 +164,7 @@ public struct ContentView: View {
                                 default:
                                     Image(systemName: "person.crop.square.fill")
                                         .font(.title2)
-                                        .foregroundStyle(CSTheme.Colors.accentCSOrange)
+                                        .foregroundStyle(AppTheme.Colors.csOrange)
                                 }
                             }
                             .frame(width: 54, height: 54)
@@ -165,7 +172,7 @@ public struct ContentView: View {
                         } else {
                             Image(systemName: "person.crop.square.fill")
                                 .font(.title2)
-                                .foregroundStyle(CSTheme.Colors.accentCSOrange)
+                                .foregroundStyle(AppTheme.Colors.csOrange)
                         }
                     }
 
@@ -173,31 +180,31 @@ public struct ContentView: View {
                         HStack(spacing: 6) {
                             Text(profile.personaName)
                                 .font(.system(size: 17, weight: .bold))
-                                .foregroundStyle(CSTheme.Colors.textPrimary)
+                                .foregroundStyle(AppTheme.Colors.textPrimary)
 
                             if profile.isPlayingCS2 {
-                                Text("CS2 ACTIF")
-                                    .font(CSTheme.Fonts.captionMono)
+                                Text("IN CS2")
+                                    .font(AppTheme.Fonts.captionMono)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(CSTheme.Colors.accentCSOrange.opacity(0.2))
-                                    .foregroundStyle(CSTheme.Colors.accentCSOrange)
+                                    .background(AppTheme.Colors.csOrange.opacity(0.2))
+                                    .foregroundStyle(AppTheme.Colors.csOrange)
                                     .clipShape(Capsule())
                             }
                         }
 
-                        Text("ID : \(profile.steamID64)")
-                            .font(CSTheme.Fonts.captionMono)
-                            .foregroundStyle(CSTheme.Colors.textSecondary)
+                        Text("ID: \(profile.steamID64)")
+                            .font(AppTheme.Fonts.captionMono)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
 
                         HStack(spacing: 10) {
-                            Label(profile.personaState.label, systemImage: "dot.radiowaves.left.and.right")
-                                .font(CSTheme.Fonts.captionMono)
-                                .foregroundStyle(CSTheme.Colors.accentCTBlue)
+                            Label(profile.personaState.displayName, systemImage: "dot.radiowaves.left.and.right")
+                                .font(AppTheme.Fonts.captionMono)
+                                .foregroundStyle(AppTheme.Colors.ctBlue)
 
-                            Label(profile.visibilityState.label, systemImage: "eye")
-                                .font(CSTheme.Fonts.captionMono)
-                                .foregroundStyle(CSTheme.Colors.textSecondary)
+                            Label(profile.visibilityState.displayName, systemImage: "eye")
+                                .font(AppTheme.Fonts.captionMono)
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
                         }
                     }
 
@@ -213,37 +220,39 @@ public struct ContentView: View {
                         HStack(spacing: 8) {
                             if sessionStore.isLoadingNetwork {
                                 ProgressView()
-                                    .tint(CSTheme.Colors.textPrimary)
+                                    .tint(AppTheme.Colors.textPrimary)
                             } else {
                                 Image(systemName: "arrow.triangle.2.circlepath")
                             }
-                            Text("TESTER L'APPEL DIRECT-TO-API STEAM")
+                            Text("SYNC PROFILE DIRECTLY FROM STEAM")
                         }
+                        .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(CSSecondaryButtonStyle(borderColor: CSTheme.Colors.accentCTBlue))
+                    .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.ctBlue))
                     .disabled(sessionStore.isLoadingNetwork)
                 }
             }
-            .csTacticalCard(accentBorder: CSTheme.Colors.accentCTBlue.opacity(0.5))
+            .tacticalCard(accentBorder: AppTheme.Colors.ctBlue.opacity(0.5))
         }
     }
 
     private var credentialsFormCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("CONFIGURATION DES ACCÈS STEAM")
-                .font(CSTheme.Fonts.sectionTitle)
-                .foregroundStyle(CSTheme.Colors.accentCSOrange)
+            Text("STEAM CREDENTIALS SETUP")
+                .font(AppTheme.Fonts.sectionTitle)
+                .foregroundStyle(AppTheme.Colors.csOrange)
 
+            // SteamID64 Field
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("STEAMID64 (17 CHIFFRES)")
-                        .font(CSTheme.Fonts.captionMono)
-                        .foregroundStyle(CSTheme.Colors.textSecondary)
+                    Text("STEAMID64 (17 DIGITS)")
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                     Spacer()
                     if let isSteamIDValid {
-                        Text(isSteamIDValid ? "FORMAT VALIDE" : "FORMAT INVALIDE")
-                            .font(CSTheme.Fonts.captionMono)
-                            .foregroundStyle(isSteamIDValid ? CSTheme.Colors.statusSafe : CSTheme.Colors.accentCSOrange)
+                        Text(isSteamIDValid ? "VALID FORMAT" : "INVALID FORMAT")
+                            .font(AppTheme.Fonts.captionMono)
+                            .foregroundStyle(isSteamIDValid ? AppTheme.Colors.statusSuccess : AppTheme.Colors.csOrange)
                     }
                 }
 
@@ -251,92 +260,130 @@ public struct ContentView: View {
                     .keyboardType(.numberPad)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .csTextFieldStyle(isValid: isSteamIDValid)
+                    .tacticalTextField(isValid: isSteamIDValid)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            // Steam Web API Key Field + "Get API Key" Button
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("CLÉ STEAM WEB API (OPTIONNELLE - 32 HEX)")
-                        .font(CSTheme.Fonts.captionMono)
-                        .foregroundStyle(CSTheme.Colors.textSecondary)
+                    Text("STEAM WEB API KEY (OPTIONAL)")
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                     Spacer()
                     Button {
                         isAPIKeyVisible.toggle()
                     } label: {
-                        Text(isAPIKeyVisible ? "MASQUER" : "AFFICHER")
-                            .font(CSTheme.Fonts.captionMono)
-                            .foregroundStyle(CSTheme.Colors.accentCTBlue)
+                        Text(isAPIKeyVisible ? "HIDE" : "SHOW")
+                            .font(AppTheme.Fonts.captionMono)
+                            .foregroundStyle(AppTheme.Colors.ctBlue)
                     }
                 }
 
-                Group {
-                    if isAPIKeyVisible {
-                        TextField("Ex: A1B2C3D4E5F60718293A4B5C6D7E8F90", text: $apiKeyInput)
-                    } else {
-                        SecureField("Clé locale stockée dans le Keychain", text: $apiKeyInput)
-                    }
-                }
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .csTextFieldStyle(isValid: isAPIKeyValid)
-            }
-
-            if let statusMessage = sessionStore.statusMessage {
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark.shield.fill")
-                        .foregroundStyle(CSTheme.Colors.statusSafe)
-                    Text(statusMessage)
-                        .font(CSTheme.Fonts.captionMono)
-                        .foregroundStyle(CSTheme.Colors.statusSafe)
+                    Group {
+                        if isAPIKeyVisible {
+                            TextField("32-character hex key", text: $apiKeyInput)
+                        } else {
+                            SecureField("Stored locally in Keychain", text: $apiKeyInput)
+                        }
+                    }
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .tacticalTextField(isValid: isAPIKeyValid)
+
+                    Button {
+                        isShowingSteamAPIKeyPortal = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "key.fill")
+                            Text("Get API Key")
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.csOrange))
+                }
+
+                // Informational Banner / Tip
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(AppTheme.Colors.ctBlue)
+                        .font(.system(size: 15))
+                        .padding(.top, 1)
+
+                    Text("When prompted on Steam, you can enter 'localhost' in the Domain Name field.")
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(CSTheme.Colors.statusSafe.opacity(0.12))
+                .background(AppTheme.Colors.ctBlue.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(AppTheme.Colors.ctBlue.opacity(0.35), lineWidth: 1)
+                )
+            }
+
+            // Real-time Feedback Banners
+            if let statusMessage = sessionStore.statusMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .foregroundStyle(AppTheme.Colors.statusSuccess)
+                    Text(statusMessage)
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.statusSuccess)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.Colors.statusSuccess.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
             if let errorMessage = sessionStore.errorMessage {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(CSTheme.Colors.statusDanger)
+                        .foregroundStyle(AppTheme.Colors.statusDanger)
                     Text(errorMessage)
-                        .font(CSTheme.Fonts.captionMono)
-                        .foregroundStyle(CSTheme.Colors.statusDanger)
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.statusDanger)
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(CSTheme.Colors.statusDanger.opacity(0.12))
+                .background(AppTheme.Colors.statusDanger.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
+            // Save & Clear Actions
             VStack(spacing: 10) {
                 Button {
-                    sessionStore.saveCredentials(steamID64: steamIDInput, apiKey: apiKeyInput)
+                    sessionStore.saveCredentials(steamID64: steamIDInput, webAPIKey: apiKeyInput)
                     apiKeyInput = ""
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "lock.fill")
-                        Text("ENREGISTRER DANS LE KEYCHAIN")
+                        Text("SAVE TO KEYCHAIN")
                     }
                 }
-                .buttonStyle(CSPrimaryButtonStyle(tint: CSTheme.Colors.accentCSOrange))
+                .buttonStyle(PrimaryActionButtonStyle(tint: AppTheme.Colors.csOrange))
 
                 if sessionStore.storedSteamID64 != nil || sessionStore.hasStoredAPIKey {
                     Button {
-                        sessionStore.purgeCredentials()
+                        sessionStore.clearCredentials()
                         steamIDInput = ""
                         apiKeyInput = ""
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "trash.fill")
-                            Text("PURGER LE TROUSSEAU LOCAL")
+                            Text("CLEAR KEYCHAIN CREDENTIALS")
                         }
+                        .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(CSSecondaryButtonStyle(borderColor: CSTheme.Colors.statusDanger))
+                    .buttonStyle(SecondaryActionButtonStyle(borderColor: AppTheme.Colors.statusDanger))
                 }
             }
             .padding(.top, 4)
         }
-        .csTacticalCard()
+        .tacticalCard()
     }
 }
