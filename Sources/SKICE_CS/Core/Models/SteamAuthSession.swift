@@ -70,6 +70,13 @@ public final class SteamAuthSession {
         guardOptions.filter { $0.kind.requiresCodeEntry }
     }
 
+    /// The kind of code the user should type next, if one is pending. This is
+    /// the Steam app's temporary authenticator code (device code) or the email
+    /// code; both are submitted as a Steam Guard code.
+    public var pendingGuardCodeKind: SteamGuardKind? {
+        codeGuardOptions.first?.kind
+    }
+
     public var hasPersistedRefreshToken: Bool {
         store.hasPersistedSession
     }

@@ -40,6 +40,22 @@ public struct SteamAuthCard: View {
     private var isSignedIn: Bool { authSession.state == .signedIn }
     private var isConnected: Bool { authSession.hasPersistedRefreshToken }
 
+    /// Instruction text for the pending guard code, which differs between the
+    /// Steam app's temporary authenticator code and an emailed code.
+    private var guardCodeInstruction: String {
+        guard let kind = authSession.pendingGuardCodeKind else {
+            return "Enter your Steam Guard code to finish signing in."
+        }
+        switch kind {
+        case .deviceCode:
+            return "Enter the temporary 5-character code from your Steam mobile app (Steam Guard, like an authenticator code)."
+        case .emailCode, .emailConfirmation:
+            return "Enter the Steam Guard code Steam emailed you."
+        default:
+            return "Enter your Steam Guard code to finish signing in."
+        }
+    }
+
     private static let expiryFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
@@ -341,7 +357,7 @@ public struct SteamAuthCard: View {
 
     private var guardCodeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Steam needs a Steam Guard code (from your email or the Steam app). Enter it to finish signing in.")
+            Text(guardCodeInstruction)
                 .font(AppTheme.Fonts.bodyRegular)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
