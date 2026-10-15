@@ -173,7 +173,13 @@ public final class SteamAuthSession {
             pendingChallenge = challenge
             guardOptions = challenge.confirmations
             pendingQRURL = challenge.challengeURL
-            applyGuardState(for: challenge)
+            // QR login completes by scanning + approving in the Steam app, then
+            // polling. It never asks the user to type a code back into this app.
+            state = .awaitingRemoteApproval
+            canApproveInApp = false
+            statusMessage = "Approve this sign-in in the Steam mobile app."
+            DebugLogger.shared.info("SteamAuth waiting for a mobile app approval", category: "SteamAuth")
+            startPolling()
         } catch {
             fail(with: error.localizedDescription)
         }
