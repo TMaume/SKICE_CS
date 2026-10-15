@@ -10,6 +10,7 @@ public struct InventoryView: View {
     @State private var isGridView: Bool = true
     @State private var selectedItemForDetail: SkinItem?
     @State private var isShowingDebugSheet: Bool = false
+    @State private var isShowingTradeUpCalculator: Bool = false
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 155, maximum: 210), spacing: 12)
@@ -57,6 +58,14 @@ public struct InventoryView: View {
                 }
 
                 Button {
+                    isShowingTradeUpCalculator = true
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(AppTheme.Colors.csOrange)
+                }
+                .accessibilityLabel("Open Trade-Up Calculator")
+
+                Button {
                     withAnimation(.snappy(duration: 0.2)) {
                         isGridView.toggle()
                     }
@@ -82,6 +91,9 @@ public struct InventoryView: View {
             SkinDetailSheet(item: item, price: viewModel.price(for: item))
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isShowingTradeUpCalculator) {
+            TradeUpCalculatorView(inventory: viewModel.items, priceStore: viewModel.priceStore)
         }
         .sheet(isPresented: $isShowingDebugSheet) {
             NavigationStack {
