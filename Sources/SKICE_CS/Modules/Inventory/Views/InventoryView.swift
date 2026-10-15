@@ -32,6 +32,7 @@ public struct InventoryView: View {
                 if !viewModel.items.isEmpty {
                     summaryHeaderBar
                     portfolioValueBar
+                    tradeUpTile
                     filterControlBar
                 }
 
@@ -117,6 +118,48 @@ public struct InventoryView: View {
     }
 
     // MARK: - Subviews
+
+    /// Prominent, labelled entry point to the Trade-Up Contract calculator.
+    private var tradeUpTile: some View {
+        Button {
+            isShowingTradeUpCalculator = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.csOrange)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.Colors.csOrange.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("TRADE-UP CONTRACT")
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
+                    Text("Simulate 10 same-rarity items · EV & ROI in EUR")
+                        .font(.system(size: 10))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .background(Color(white: 0.07))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open Trade-Up Calculator")
+    }
 
     private var summaryHeaderBar: some View {
         HStack(spacing: 14) {
