@@ -32,6 +32,7 @@ public struct ProfileView: View {
                     identityCard
                     connectionStatusCard
                     premierRankCard
+                    rankedModeCard
 
                     if let stats = statsModel.overviewStats {
                         careerSnapshot(stats)
@@ -402,6 +403,21 @@ public struct ProfileView: View {
             }
         }
         .tacticalCard(accentBorder: AppTheme.Colors.csOrange.opacity(0.3))
+    }
+
+    // MARK: - Ranked mode overview (competitive / Wingman, Tier B)
+
+    /// The ranked-mode overview (Wingman rank + best competitive map), shown
+    /// only when the Game Coordinator returned those ladders.
+    @ViewBuilder
+    private var rankedModeCard: some View {
+        if rankModel.wingmanRank != nil || rankModel.competitiveRank != nil {
+            RankedModeOverviewCard(
+                wingman: rankModel.wingmanRank,
+                competitive: rankModel.competitiveRank,
+                lastUpdated: rankModel.lastUpdated
+            )
+        }
     }
 
     @ViewBuilder
