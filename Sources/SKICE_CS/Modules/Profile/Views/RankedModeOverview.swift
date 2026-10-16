@@ -123,7 +123,8 @@ struct RankedModeOverviewCard: View {
                     currentRankID: wingman?.rankID,
                     peakRankID: wingman?.highestRank,
                     subtitle: wingman.map { CS2RankCatalog.name(for: $0.rankID) },
-                    detail: wingman.map { "\($0.wins) wins" }
+                    detail: wingman.map { "\($0.wins) wins" },
+                    emptyText: "No Wingman rank yet"
                 )
 
                 rankTile(
@@ -131,7 +132,8 @@ struct RankedModeOverviewCard: View {
                     currentRankID: bestMap?.rankID,
                     peakRankID: competitive?.highestRank,
                     subtitle: bestMap.map { SteamMapCatalog.displayName(forGCID: $0.mapID) },
-                    detail: bestMap.map { "\(CS2RankCatalog.name(for: $0.rankID)) · \($0.wins) wins" }
+                    detail: bestMap.map { "\(CS2RankCatalog.name(for: $0.rankID)) · \($0.wins) wins" },
+                    emptyText: "No competitive map ranks yet"
                 )
             }
 
@@ -169,7 +171,8 @@ struct RankedModeOverviewCard: View {
         currentRankID: UInt32?,
         peakRankID: UInt32?,
         subtitle: String?,
-        detail: String?
+        detail: String?,
+        emptyText: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
@@ -195,7 +198,7 @@ struct RankedModeOverviewCard: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
             } else {
-                Text("No data")
+                Text(emptyText)
                     .font(AppTheme.Fonts.captionMono)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
             }

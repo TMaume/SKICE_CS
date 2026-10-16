@@ -225,6 +225,23 @@ enum GameCoordinatorDecoder {
                 decoder.skip(wireType: wire)
             }
         }
+
+        // Ungated diagnostic: always log the decoded ladder summary so the
+        // rank_type_id and per_map_rank (map_id) values are visible in the
+        // debug console without enabling "Extensive GC Logging". These ids are
+        // the PROVISIONAL part of the ranked-mode feature and need confirming
+        // against a live payload.
+        let summary = rankings.isEmpty
+            ? "(none)"
+            : rankings.map { entry in
+                var s = "type=\(entry.rankTypeID) rank=\(entry.rankID) wins=\(entry.wins) maps=\(entry.perMapRanks.count)"
+                if !entry.perMapRanks.isEmpty {
+                    s += " [" + entry.perMapRanks.map { "\($0.mapID):\($0.rankID)" }.joined(separator: ",") + "]"
+                }
+                return s
+            }.joined(separator: " | ")
+        DebugLogger.shared.info("GC ranking entries: \(summary)", category: "GameCoordinator")
+
         return rankings
     }
 

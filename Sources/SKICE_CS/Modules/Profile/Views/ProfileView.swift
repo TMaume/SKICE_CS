@@ -407,8 +407,9 @@ public struct ProfileView: View {
 
     // MARK: - Ranked mode overview (competitive / Wingman, Tier B)
 
-    /// The ranked-mode overview (Wingman rank + best competitive map), shown
-    /// only when the Game Coordinator returned those ladders.
+    /// The ranked-mode overview (Wingman rank + best competitive map). Always
+    /// rendered so it appears on launch (with cached values or a hint) instead
+    /// of only after a successful refresh.
     @ViewBuilder
     private var rankedModeCard: some View {
         if rankModel.wingmanRank != nil || rankModel.competitiveRank != nil {
@@ -417,7 +418,48 @@ public struct ProfileView: View {
                 competitive: rankModel.competitiveRank,
                 lastUpdated: rankModel.lastUpdated
             )
+        } else {
+            rankedModePlaceholder
         }
+    }
+
+    /// Mirrors the Premier card's loading / error / hint states so the ranked
+    /// mode section is never empty while the shared GC fetch is in flight.
+    @ViewBuilder
+    private var rankedModePlaceholder: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("RANKED MODE")
+                    .font(AppTheme.Fonts.sectionTitle)
+                    .foregroundStyle(AppTheme.Colors.csOrange)
+                Spacer()
+            }
+
+            if rankModel.isLoading {
+                HStack(spacing: 8) {
+                    ProgressView().tint(AppTheme.Colors.csOrange)
+                    Text("Reading ranks from the Game Coordinator…")
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+            } else if let error = rankModel.errorMessage {
+                Text(error)
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.statusDanger)
+                    .lineLimit(2)
+            } else if rankModel.lastUpdated != nil {
+                Text("No Wingman or competitive ranks yet — play matches to establish them.")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            } else {
+                Text(authSession.isSignedIn
+                     ? "Tap refresh on the Premier card to read your Wingman and competitive ranks."
+                     : "Sign in to Steam (Settings) to see your Wingman and competitive ranks.")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+        }
+        .tacticalCard(accentBorder: AppTheme.Colors.csOrange.opacity(0.3))
     }
 
     @ViewBuilder
