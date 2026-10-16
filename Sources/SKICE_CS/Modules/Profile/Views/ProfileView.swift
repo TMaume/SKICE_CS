@@ -375,6 +375,7 @@ public struct ProfileView: View {
                 }
 
                 ratingSparkline
+                lastUpdatedLine
             } else if rankModel.isLoading {
                 HStack(spacing: 8) {
                     ProgressView().tint(AppTheme.Colors.csOrange)
@@ -382,19 +383,22 @@ public struct ProfileView: View {
                         .font(AppTheme.Fonts.captionMono)
                         .foregroundStyle(AppTheme.Colors.textSecondary)
                 }
+            } else if let error = rankModel.errorMessage {
+                Text(error)
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.statusDanger)
+                    .lineLimit(2)
+            } else if rankModel.lastUpdated != nil {
+                Text("No Premier rating yet — play a Premier match to establish your CS Rating.")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                lastUpdatedLine
             } else {
                 Text(authSession.isSignedIn
                      ? "Tap refresh to read your Premier rating. Steam must be closed on other devices."
                      : "Sign in to Steam (Settings) to read your Premier rating.")
                     .font(AppTheme.Fonts.captionMono)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
-            }
-
-            if let error = rankModel.errorMessage {
-                Text(error)
-                    .font(AppTheme.Fonts.captionMono)
-                    .foregroundStyle(AppTheme.Colors.statusDanger)
-                    .lineLimit(2)
             }
         }
         .tacticalCard(accentBorder: AppTheme.Colors.csOrange.opacity(0.3))
@@ -418,6 +422,19 @@ public struct ProfileView: View {
             }
             .frame(height: 40)
             .accessibilityLabel("Rating history from \(history.first?.rating ?? 0) to \(history.last?.rating ?? 0)")
+        }
+    }
+
+    @ViewBuilder
+    private var lastUpdatedLine: some View {
+        if let updated = rankModel.lastUpdated {
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.caption2)
+                Text("Updated \(updated, style: .relative)")
+            }
+            .font(AppTheme.Fonts.captionMono)
+            .foregroundStyle(AppTheme.Colors.textSecondary)
         }
     }
 

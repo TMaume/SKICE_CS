@@ -27,7 +27,7 @@ public final class SteamSessionStore {
         if let id = try? keychain.read(for: .steamID64), !id.isEmpty {
             storedSteamID64 = id
             if activeProfile?.steamID64 != id {
-                activeProfile = SteamUserProfile(
+                activeProfile = Self.loadCachedProfile(for: id) ?? SteamUserProfile(
                     steamID64: id,
                     personaName: "Operator #\(id.suffix(4))",
                     profileURL: URL(string: "https://steamcommunity.com/profiles/\(id)"),
@@ -140,9 +140,26 @@ public final class SteamSessionStore {
             }
 
             activeProfile = player
+            Self.saveCachedProfile(player, for: steamID)
             statusMessage = "Steam profile synced directly from Valve servers."
         } catch {
             errorMessage = "Direct-to-API sync failed: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Local profile cache
+
+    private static func profileCacheKey(_ steamID64: String) -> String {
+        "com.dtl21.SKICEcs.cachedProfile." + steamID64
+    }
+
+    private static func saveCachedProfile(_ profile: SteamUserProfile, for steamID64: String) {
+        guard let data = try? JSONEncoder().encode(profile) else { return }
+        UserDefaults.standard.set(data, forKey: profileCacheKey(steamID64))
+    }
+
+    private static func loadCachedProfile(for steamID64: String) -> SteamUserProfile? {
+        guard let data = UserDefaults.standard.data(forKey: profileCacheKey(steamID64)) else { return nil }
+        return try? JSONDecoder().decode(SteamUserProfile.self, from: data)
     }
 }

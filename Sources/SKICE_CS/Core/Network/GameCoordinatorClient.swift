@@ -235,7 +235,9 @@ public actor GameCoordinatorClient {
 
         try await sendGamesPlayed()
         try await sendGCHello()
-        try await sendMatchmakingClient2GCHello()
+        // The profile request must come after the welcome establishes the GC
+        // session; firing it before the welcome is what made the reply flaky.
+        try await awaitWelcome()
         try await sendClientRequestPlayersProfile(accountID: UInt32(truncatingIfNeeded: steamID64))
 
         gcInfo("GC ranking awaiting ranking message")
@@ -704,6 +706,45 @@ public actor GameCoordinatorClient {
                 return inspections
             }
         }
+    }
+
+    /// Consumes frames until the GC ClientWelcome (4004) arrives, so the GC
+    /// session is established before the profile request is sent.
+    private func awaitWelcome() async throws {
+        let deadline = Date().addingTimeInterval(30)
+        while true {
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 { break }
+            let frame: (emsg: UInt32, header: Data, body: Data)
+            do {
+                frame = try await nextFrame(timeout: min(15, remaining))
+            } catch GameCoordinatorError.timeout {
+                break
+            }
+            if let eresult = Self.loggedOffResult(frame) {
+                gcInfo("GC ranking logged off during welcome: EResult \(eresult)")
+                throw Self.loggedOffError(eresult)
+            }
+            guard frame.emsg == Self.emsgClientFromGC else { continue }
+
+            var gcDecoder = ProtobufDecoder(frame.body)
+            var msgtype: UInt32 = 0
+            while let (field, wire) = gcDecoder.readTag() {
+                if field == 2, let value = gcDecoder.readVarint() {
+                    msgtype = UInt32(truncatingIfNeeded: value)
+                } else {
+                    gcDecoder.skip(wireType: wire)
+                }
+            }
+            let innerType = msgtype & ~Self.protoMask
+            gcInfo("GC ranking awaitWelcome innerType=\(innerType)")
+            if innerType == Self.emsgGCClientWelcome {
+                gcInfo("GC received ClientWelcome")
+                return
+            }
+        }
+        gcInfo("GC ranking: no ClientWelcome before giving up")
+        throw GameCoordinatorError.timeout
     }
 
     /// Receives until the GC sends MatchmakingGC2ClientHello (9110), then

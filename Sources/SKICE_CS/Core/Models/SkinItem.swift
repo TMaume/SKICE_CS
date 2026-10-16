@@ -100,13 +100,49 @@ public enum SkinExterior: String, CaseIterable, Codable, Sendable {
 }
 
 /// Represents the verified trade availability state of a CS2 inventory item.
-public enum SkinTradeStatus: Hashable, Sendable {
+public enum SkinTradeStatus: Hashable, Sendable, Codable {
     /// Item has `tradable == 1` and can be traded immediately.
     case tradable
     /// Item has `tradable == 0` AND carries a verified future expiration date or explicit "Tradable After" timestamp.
     case tradeCooldown(expirationDate: Date?, untilDateText: String)
     /// Item has `tradable == 0` and no expiration timestamp (e.g., Service Medals, Storage Units, base items).
     case untradable
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, expirationDate, untilDateText
+    }
+
+    private enum Kind: String, Codable {
+        case tradable, tradeCooldown, untradable
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .tradable:
+            self = .tradable
+        case .untradable:
+            self = .untradable
+        case .tradeCooldown:
+            let expirationDate = try container.decodeIfPresent(Date.self, forKey: .expirationDate)
+            let untilDateText = try container.decode(String.self, forKey: .untilDateText)
+            self = .tradeCooldown(expirationDate: expirationDate, untilDateText: untilDateText)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .tradable:
+            try container.encode(Kind.tradable, forKey: .kind)
+        case .untradable:
+            try container.encode(Kind.untradable, forKey: .kind)
+        case .tradeCooldown(let expirationDate, let untilDateText):
+            try container.encode(Kind.tradeCooldown, forKey: .kind)
+            try container.encodeIfPresent(expirationDate, forKey: .expirationDate)
+            try container.encode(untilDateText, forKey: .untilDateText)
+        }
+    }
 
     /// Compact badge label for grid and list cards. Never fabricates a "7D LOCK" from static class rules.
     public var badgeLabel: String? {
@@ -146,7 +182,7 @@ public enum SkinTradeStatus: Hashable, Sendable {
 }
 
 /// Clean, UI-ready domain model representing a single item in a user's CS2 inventory.
-public struct SkinItem: Identifiable, Hashable, Sendable {
+public struct SkinItem: Identifiable, Hashable, Sendable, Codable {
     public let id: String
     public let assetId: String
     public let classId: String

@@ -162,6 +162,13 @@ public final class InventoryViewModel {
             return
         }
 
+        // Render the cached inventory immediately while the network refresh runs.
+        if !forceRefresh, items.isEmpty, let cached = Self.loadCachedItems(for: trimmed) {
+            items = cached
+            lastLoadedSteamID = trimmed
+            recomputeDerivedState()
+        }
+
         isLoading = true
         currentError = nil
 
@@ -169,6 +176,7 @@ public final class InventoryViewModel {
             let fetchedItems = try await service.fetchInventory(for: trimmed)
             self.items = fetchedItems
             self.lastLoadedSteamID = trimmed
+            Self.saveCachedItems(fetchedItems, for: trimmed)
             recomputeDerivedState()
         } catch let inventoryError as SteamInventoryError {
             self.currentError = inventoryError
@@ -284,5 +292,21 @@ public final class InventoryViewModel {
                 return lhs.rarity > rhs.rarity
             }
         }
+    }
+
+    // MARK: - Local inventory cache
+
+    private static func inventoryCacheKey(_ steamID64: String) -> String {
+        "com.dtl21.SKICEcs.cachedInventory.v1." + steamID64
+    }
+
+    private static func saveCachedItems(_ items: [SkinItem], for steamID64: String) {
+        guard let data = try? JSONEncoder().encode(items) else { return }
+        UserDefaults.standard.set(data, forKey: inventoryCacheKey(steamID64))
+    }
+
+    private static func loadCachedItems(for steamID64: String) -> [SkinItem]? {
+        guard let data = UserDefaults.standard.data(forKey: inventoryCacheKey(steamID64)) else { return nil }
+        return try? JSONDecoder().decode([SkinItem].self, from: data)
     }
 }
