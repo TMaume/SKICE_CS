@@ -194,6 +194,8 @@ DELIVERED
 - Stats: Steam Web API (career) + FACEIT v4 (history / ELO), local snapshot.
 - Logging: DebugLogger + Developer Mode.
 - GC Inspect: exact wear float / pattern seed / StatTrak kills / applied stickers, read from the Game Coordinator (Tier B) and cached on-device (ItemInspectionStore).
+- Image caching: Steam CDN thumbnails cached on-device (memory + disk, deduped downloads) via `ImageManager` / `CachedAsyncImage`.
+- Premier rating: CS2 ranked ladders read from the Game Coordinator (Tier B); local on-device rating history (`RatingSnapshotStore`); compact rating card + sparkline on the Profile tab. Field semantics provisional, pending on-device confirmation.
 
 NOT STARTED (empty placeholders)
 
@@ -224,8 +226,8 @@ CORE REFACTOR (2026-10-16)
 
 Reference: Recon-Bolt — a Valorant companion app (open-source), cloned at /home/dtl21/Documents/Recon-Bolt. Reviewed 2026-10-16. Its UI/UX patterns port; its third-party packages (HandyOperators, UserDefault) are NOT adopted (ADR-06: zero SPM deps). Roughly in priority order.
 
-1. Image caching (M3). SKICE_CS grids use bare `AsyncImage`; Recon Bolt has a dedicated `ImageManager`: an actor that deduplicates concurrent downloads, a size-capped in-memory cache (256x256 px) falling back to disk for large images, version-aware re-download via sidecar metadata, and 50 ms-batched UI updates. Port the pattern for Steam CDN thumbnails to kill grid-scroll jank on large inventories. Still zero-trust (images come straight from Steam).
-2. Rank / rating tracking + widgets (M0). Recon Bolt's origin feature: track competitive rank over time (`RankInfoView`, `ActRankView`) plus home-screen widgets. CS2 analog: track CS Rating / Premier rating history and ship a WidgetKit widget. New capability — no equivalent today.
+1. Image caching (M3). SKICE_CS grids use bare `AsyncImage`; Recon Bolt has a dedicated `ImageManager`: an actor that deduplicates concurrent downloads, a size-capped in-memory cache (256x256 px) falling back to disk for large images, version-aware re-download via sidecar metadata, and 50 ms-batched UI updates. Port the pattern for Steam CDN thumbnails to kill grid-scroll jank on large inventories. Still zero-trust (images come straight from Steam). **Delivered 2026-10-16** (`ImageManager` / `CachedAsyncImage`, zero SPM deps).
+2. Rank / rating tracking + widgets (M0). Recon Bolt's origin feature: track competitive rank over time (`RankInfoView`, `ActRankView`) plus home-screen widgets. CS2 analog: track CS Rating / Premier rating history and ship a WidgetKit widget. New capability — no equivalent today. **Partial 2026-10-16**: rating tracking delivered (GC `MatchmakingGC2ClientHello` + local history + Profile card); the WidgetKit widget is deferred — xtool cannot build an app-extension target.
 3. Live-match UI (M1, Phase 3). Recon Bolt `LiveMatchView`: a map-splash hero (200 pt, material overlay, mode label) over a team-grouped player list with agent icon + rank badge. Template for a CS2 live scoreboard + round-kill feed (GSI / NetCon).
 4. Stats visualisations (M4). Win-rate, hit-distribution heatmap, playtime. CS2 additions: per-map win rate, hit distribution, playtime.
 5. Reference tab (M5 Tactics). Recon Bolt `AgentInfoView` / `WeaponInfoView`: offline, browsable reference. Template for a weapon / map / callout reference tab.
