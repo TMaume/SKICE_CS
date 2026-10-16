@@ -21,7 +21,7 @@ public struct PriceEntry: Codable, Sendable, Hashable {
     public var displayValue: Decimal { median ?? lowest }
 }
 
-/// A menu of Steam Market prices keyed by \`market_hash_name\`.
+/// A menu of Steam Market prices keyed by `market_hash_name`.
 public struct PriceTable: Codable, Sendable {
     public let entries: [String: PriceEntry]
     public let fetchedAt: Date
@@ -48,11 +48,11 @@ public struct PriceTable: Codable, Sendable {
     }
 }
 
-/// Fetches Steam Community Market prices (EUR) for a set of \`market_hash_name\`
+/// Fetches Steam Community Market prices (EUR) for a set of `market_hash_name`
 /// values and caches the result locally for ~24h.
 ///
 /// Steam exposes no bulk price endpoint, so each distinct owned item is queried
-/// individually through \`APIClient\` (retry/backoff honoring \`Retry-After\`),
+/// individually through `APIClient` (retry/backoff honoring `Retry-After`),
 /// with bounded concurrency and a small politeness delay. Scope is intentionally
 /// limited to the items actually present in the user's inventory.
 public struct PriceService: Sendable {
@@ -82,7 +82,7 @@ public struct PriceService: Sendable {
 
     // MARK: - Public API
 
-    /// Returns a price table covering \`hashes\`, fetching only what the cache is
+    /// Returns a price table covering `hashes`, fetching only what the cache is
     /// missing (or everything, when stale / forced). Never throws on individual
     /// item failures — those simply stay absent ("—" in the UI).
     public func loadPriceTable(for hashes: Set<String>, forceRefresh: Bool = false) async throws -> PriceTable {

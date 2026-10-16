@@ -98,7 +98,7 @@ public final class InventoryViewModel {
     }
 
     /// Recomputes the cached filtered list and counters. Called after any change
-    /// to \`items\`, search text, or a filter/sort control.
+    /// to `items`, search text, or a filter/sort control.
     private func recomputeDerivedState() {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 

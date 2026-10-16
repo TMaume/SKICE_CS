@@ -1,6 +1,6 @@
 import Foundation
 
-/// A single decoded HTTP response returned by \`APIClient\`.
+/// A single decoded HTTP response returned by `APIClient`.
 public struct APIResponse: Sendable {
     public let data: Data
     public let statusCode: Int
@@ -9,7 +9,7 @@ public struct APIResponse: Sendable {
     public let durationMs: Int
 }
 
-/// Transport-level errors raised by \`APIClient\`. HTTP status codes are NOT
+/// Transport-level errors raised by `APIClient`. HTTP status codes are NOT
 /// errors here — callers map status codes to their own typed errors so each
 /// service keeps its existing, specific error vocabulary.
 public enum APIClientError: LocalizedError, Sendable {
@@ -27,7 +27,7 @@ public enum APIClientError: LocalizedError, Sendable {
 }
 
 /// Central HTTP transport: request building, retry/backoff (honoring
-/// \`Retry-After\`), and secret redaction. Each service keeps its own typed
+/// `Retry-After`), and secret redaction. Each service keeps its own typed
 /// error mapping and log categories; this only owns transport concerns.
 public struct APIClient: Sendable {
     public static let shared = APIClient()
@@ -70,7 +70,7 @@ public struct APIClient: Sendable {
     /// Sends the request, retrying transient HTTP failures (429 and 5xx) with
     /// Retry-After-aware backoff. Returns the final response for any HTTP
     /// status so callers keep their own status-to-typed-error mapping. Throws
-    /// \`APIClientError\` only for transport-level failures.
+    /// `APIClientError` only for transport-level failures.
     public func send(_ request: URLRequest) async throws -> APIResponse {
         var attempt = 0
         while true {
