@@ -150,6 +150,9 @@ public actor GameCoordinatorClient {
     private var heartbeatTask: Task<Void, Never>?
     private var currentSteamID: UInt64 = 0
     private var currentSessionID: Int32 = 0
+    /// Frames received but not yet consumed by a stage. Survives across stages
+    /// so a batched CM reply is never dropped when a stage returns early.
+    private var frameBuffer: [(emsg: UInt32, header: Data, body: Data)] = []
 
     public init() {}
 
@@ -518,7 +521,15 @@ public actor GameCoordinatorClient {
         let outcome = await withTaskGroup(of: ReceiveOutcome.self) { group -> ReceiveOutcome in
             group.addTask {
                 do {
-                    let message = try await socket.receive()
+                    // URLSessionWebSocketTask.receive() is not cancellation-aware:
+                    // cancelling the Swift task alone leaves it parked, so the task
+                    // group would wait forever. Cancel the socket itself so the
+                    // receive unblocks when the deadline fires.
+                    let message = try await withTaskCancellationHandler {
+                        try await socket.receive()
+                    } onCancel: {
+                        socket.cancel(with: .goingAway, reason: nil)
+                    }
                     switch message {
                     case .data(let data): return .data(data)
                     case .string(let text): return .data(Data(text.utf8))
@@ -580,7 +591,7 @@ public actor GameCoordinatorClient {
 
     private func awaitLogonResponse() async throws -> Int32 {
         while true {
-            for frame in try await receiveFrames(timeout: 15) {
+            for frame in [try await nextFrame(timeout: 15)] {
                 if let eresult = Self.loggedOffResult(frame) {
                     gcInfo("GC logged off during logon: EResult \(eresult)")
                     throw Self.loggedOffError(eresult)
@@ -621,7 +632,7 @@ public actor GameCoordinatorClient {
 
     private func awaitWelcomeAndDecode() async throws -> [GCItemInspection] {
         while true {
-            for frame in try await receiveFrames(timeout: 15) {
+            for frame in [try await nextFrame(timeout: 15)] {
                 if let eresult = Self.loggedOffResult(frame) {
                     gcInfo("GC logged off during welcome: EResult \(eresult)")
                     throw Self.loggedOffError(eresult)
@@ -671,7 +682,7 @@ public actor GameCoordinatorClient {
     /// decodes the player's ranked ladders from it.
     private func awaitRankingAndDecode() async throws -> [PlayerRankingInfo] {
         while true {
-            for frame in try await receiveFrames(timeout: 15) {
+            for frame in [try await nextFrame(timeout: 15)] {
                 if let eresult = Self.loggedOffResult(frame) {
                     gcInfo("GC ranking logged off: EResult \(eresult)")
                     throw Self.loggedOffError(eresult)
@@ -715,6 +726,16 @@ public actor GameCoordinatorClient {
                 return rankings
             }
         }
+    }
+
+    /// Returns the next frame, draining frames buffered by an earlier stage
+    /// first. Keeps a batched CM reply from being dropped when a stage (logon,
+    /// welcome, ranking) returns as soon as it sees its target message.
+    private func nextFrame(timeout: TimeInterval) async throws -> (emsg: UInt32, header: Data, body: Data) {
+        while frameBuffer.isEmpty {
+            frameBuffer.append(contentsOf: try await receiveFrames(timeout: timeout))
+        }
+        return frameBuffer.removeFirst()
     }
 
     // MARK: - Machine ID
@@ -775,6 +796,7 @@ public actor GameCoordinatorClient {
     }
 
     private func teardown() {
+        frameBuffer.removeAll()
         heartbeatTask?.cancel()
         heartbeatTask = nil
         socket?.cancel(with: .goingAway, reason: nil)

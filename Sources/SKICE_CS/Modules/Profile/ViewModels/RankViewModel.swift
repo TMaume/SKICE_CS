@@ -51,7 +51,7 @@ public final class RankViewModel {
             }
             history = store.loadSnapshots(for: steamID64)
             if entries.isEmpty {
-                errorMessage = "The Game Coordinator returned no ranking data."
+                errorMessage = "No Premier rating yet — play a Premier match to establish your CS Rating."
             }
         } catch {
             errorMessage = error.localizedDescription
