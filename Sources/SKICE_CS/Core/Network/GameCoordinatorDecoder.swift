@@ -302,4 +302,20 @@ enum GameCoordinatorDecoder {
             rankExpiry: rankExpiry
         )
     }
+
+    /// Decodes CMsgGCCStrike15_v2_PlayersProfile (the reply to
+    /// ClientRequestPlayersProfile) by pulling the ranking out of each returned
+    /// MatchmakingGC2ClientHello profile (field 2, repeated).
+    static func decodePlayersProfile(_ data: Data) -> [PlayerRankingInfo] {
+        var rankings: [PlayerRankingInfo] = []
+        var decoder = ProtobufDecoder(data)
+        while let (field, wire) = decoder.readTag() {
+            if field == 2, wire == 2, let profileBytes = decoder.readLengthDelimited() {
+                rankings.append(contentsOf: decodeMatchmakingHello(profileBytes))
+            } else {
+                decoder.skip(wireType: wire)
+            }
+        }
+        return rankings
+    }
 }

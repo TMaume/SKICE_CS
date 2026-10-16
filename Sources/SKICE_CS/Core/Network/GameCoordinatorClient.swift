@@ -135,6 +135,8 @@ public actor GameCoordinatorClient {
     private static let emsgGCClientWelcome: UInt32 = 4004
     private static let emsgMatchmakingClient2GCHello: UInt32 = 9109
     private static let emsgMatchmakingGC2ClientHello: UInt32 = 9110
+    private static let emsgClientRequestPlayersProfile: UInt32 = 9127
+    private static let emsgPlayersProfile: UInt32 = 9128
     private static let emsgMulti: UInt32 = 1
 
     private static let cs2AppID: UInt32 = 730
@@ -234,8 +236,9 @@ public actor GameCoordinatorClient {
         try await sendGamesPlayed()
         try await sendGCHello()
         try await sendMatchmakingClient2GCHello()
+        try await sendClientRequestPlayersProfile(accountID: UInt32(truncatingIfNeeded: steamID64))
 
-        gcInfo("GC ranking awaiting MatchmakingGC2ClientHello")
+        gcInfo("GC ranking awaiting ranking message")
         return try await awaitRankingAndDecode()
     }
 
@@ -358,6 +361,31 @@ public actor GameCoordinatorClient {
         var gcMessage = ProtobufEncoder()
         gcMessage.writeUInt64(1, UInt64(Self.cs2AppID))
         gcMessage.writeUInt64(2, UInt64(Self.emsgMatchmakingClient2GCHello | Self.protoMask))
+        gcMessage.writeBytes(3, inner)
+
+        try await send(
+            Self.emsgClientToGC,
+            header: Self.header(steamID64: currentSteamID, sessionID: currentSessionID, routingAppID: Self.cs2AppID),
+            body: gcMessage
+        )
+    }
+
+    /// Asks the GC for a player profile; the reply (PlayersProfile, 9128) carries
+    /// the ranked ladders. account_id is the low 32 bits of the SteamID64 and
+    /// request_level mirrors the reference client (node-globaloffensive: 32).
+    private func sendClientRequestPlayersProfile(accountID: UInt32) async throws {
+        var body = ProtobufEncoder()
+        body.writeUInt64(3, UInt64(accountID))   // account_id
+        body.writeUInt64(4, 32)                  // request_level
+
+        var inner = Data()
+        inner.appendUInt32LE(Self.emsgClientRequestPlayersProfile | Self.protoMask)
+        inner.appendUInt32LE(0)
+        inner.append(body.data)
+
+        var gcMessage = ProtobufEncoder()
+        gcMessage.writeUInt64(1, UInt64(Self.cs2AppID))
+        gcMessage.writeUInt64(2, UInt64(Self.emsgClientRequestPlayersProfile | Self.protoMask))
         gcMessage.writeBytes(3, inner)
 
         try await send(
@@ -681,8 +709,17 @@ public actor GameCoordinatorClient {
     /// Receives until the GC sends MatchmakingGC2ClientHello (9110), then
     /// decodes the player's ranked ladders from it.
     private func awaitRankingAndDecode() async throws -> [PlayerRankingInfo] {
+        let deadline = Date().addingTimeInterval(20)
         while true {
-            for frame in [try await nextFrame(timeout: 15)] {
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 { break }
+            var frames: [(emsg: UInt32, header: Data, body: Data)] = []
+            do {
+                frames = [try await nextFrame(timeout: min(15, remaining))]
+            } catch GameCoordinatorError.timeout {
+                break
+            }
+            for frame in frames {
                 if let eresult = Self.loggedOffResult(frame) {
                     gcInfo("GC ranking logged off: EResult \(eresult)")
                     throw Self.loggedOffError(eresult)
@@ -710,9 +747,8 @@ public actor GameCoordinatorClient {
 
                 let innerType = msgtype & ~Self.protoMask
                 gcInfo("GC ranking ClientFromGC innerType=\(innerType)")
-                guard innerType == Self.emsgMatchmakingGC2ClientHello else { continue }
+                guard innerType == Self.emsgMatchmakingGC2ClientHello || innerType == Self.emsgPlayersProfile else { continue }
 
-                gcInfo("GC received MatchmakingGC2ClientHello")
                 guard let headerLen = payload.readUInt32LE(at: 4) else {
                     throw GameCoordinatorError.malformedResponse("GC ranking frame too short")
                 }
@@ -721,11 +757,18 @@ public actor GameCoordinatorClient {
                     throw GameCoordinatorError.malformedResponse("GC ranking header overruns payload")
                 }
                 let body = payload.subdata(in: bodyStart..<payload.count)
-                let rankings = GameCoordinatorDecoder.decodeMatchmakingHello(body)
+                let rankings: [PlayerRankingInfo]
+                if innerType == Self.emsgPlayersProfile {
+                    rankings = GameCoordinatorDecoder.decodePlayersProfile(body)
+                } else {
+                    rankings = GameCoordinatorDecoder.decodeMatchmakingHello(body)
+                }
                 gcInfo("GC decoded \(rankings.count) ranking entries")
                 return rankings
             }
         }
+        gcInfo("GC ranking: no ranking message before giving up")
+        throw GameCoordinatorError.timeout
     }
 
     /// Returns the next frame, draining frames buffered by an earlier stage
