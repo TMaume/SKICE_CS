@@ -16,18 +16,10 @@ public struct StatsSnapshot: Codable, Equatable, Identifiable, Sendable {
         self.id = id
         self.steamID64 = steamID64
         self.timestamp = timestamp
-        self.dayBucket = Self.makeDayBucket(from: timestamp)
+        self.dayBucket = DayBucket.string(from: timestamp)
         self.rawStats = rawStats
     }
 
-    public static func makeDayBucket(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
-    }
 }
 
 public struct SnapshotDiffResult: Equatable, Sendable {
@@ -52,7 +44,7 @@ public final class StatsSnapshotStore {
         guard !steamID64.isEmpty, !rawStats.isEmpty else { return }
 
         var snapshots = loadSnapshots(for: steamID64)
-        let currentBucket = StatsSnapshot.makeDayBucket(from: timestamp)
+        let currentBucket = DayBucket.string(from: timestamp)
 
         if snapshots.isEmpty {
             let initial = StatsSnapshot(steamID64: steamID64, timestamp: timestamp, rawStats: rawStats)

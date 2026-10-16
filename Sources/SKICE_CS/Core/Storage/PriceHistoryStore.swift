@@ -68,7 +68,7 @@ public struct PriceHistoryStore: Sendable {
 
         for (hash, entry) in entries {
             var points = series[hash] ?? []
-            if let last = points.last, Self.dayBucket(last.fetchedAt) == Self.dayBucket(entry.fetchedAt) {
+            if let last = points.last, DayBucket.string(from: last.fetchedAt) == DayBucket.string(from: entry.fetchedAt) {
                 points[points.count - 1] = entry
             } else {
                 points.append(entry)
@@ -148,12 +148,4 @@ public struct PriceHistoryStore: Sendable {
         return dir.appendingPathComponent("steam-price-history.json")
     }
 
-    private static func dayBucket(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
-    }
 }

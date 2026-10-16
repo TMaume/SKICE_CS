@@ -57,7 +57,7 @@ public struct SteamInventoryService: SteamInventoryServicing {
     public func fetchInventory(for steamID64: String) async throws -> [SkinItem] {
         let trimmedID = steamID64.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard Self.isValidSteamID64(trimmedID) else {
+        guard SteamCredentialsValidator.isValidSteamID64(trimmedID) else {
             DebugLogger.shared.error(
                 "SteamID64 validation failed for input: '\(trimmedID)'",
                 category: "Inventory"
@@ -306,13 +306,4 @@ public struct SteamInventoryService: SteamInventoryServicing {
         }
     }
 
-    /// Validates that a string is a 17-digit numeric SteamID64 starting with `7656119`.
-    public static func isValidSteamID64(_ value: String) -> Bool {
-        guard value.count == 17,
-              value.hasPrefix("7656119"),
-              value.allSatisfy(\.isNumber) else {
-            return false
-        }
-        return true
-    }
 }
