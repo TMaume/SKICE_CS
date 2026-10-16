@@ -80,7 +80,7 @@ public actor SteamStatsService {
         let serviceTag = self.tag
 
         await MainActor.run {
-            DebugLogger.shared.logStatsNetworkRequest(request, tag: serviceTag)
+            DebugLogger.shared.logNetworkRequest(request, tag: serviceTag)
         }
 
         let apiResponse: APIResponse
@@ -89,7 +89,7 @@ public actor SteamStatsService {
         } catch let error as APIClientError {
             let errText = error.localizedDescription
             await MainActor.run {
-                DebugLogger.shared.logStatsError(errText, tag: serviceTag)
+                DebugLogger.shared.logNetworkError(errText, tag: serviceTag)
             }
             throw SteamStatsError.networkFailure(errText)
         }
@@ -102,7 +102,7 @@ public actor SteamStatsService {
             : nil
 
         await MainActor.run {
-            DebugLogger.shared.logStatsNetworkResponse(
+            DebugLogger.shared.logNetworkResponse(
                 url: url,
                 statusCode: statusCode,
                 byteCount: byteCount,
@@ -122,7 +122,7 @@ public actor SteamStatsService {
             let isKeyValid = await verifyAPIKeyWithPlayerSummaries(steamID64: cleanSteamID, apiKey: cleanAPIKey)
             if isKeyValid {
                 await MainActor.run {
-                    DebugLogger.shared.logStatsError(
+                    DebugLogger.shared.logNetworkError(
                         "API Key verified OK via GetPlayerSummaries, but GetUserStatsForGame returned HTTP \(statusCode). Cause: Steam 'Game details' privacy is set to Friends-Only/Private or 'Always keep my total playtime private' is enabled.",
                         tag: serviceTag
                     )
@@ -130,7 +130,7 @@ public actor SteamStatsService {
                 throw SteamStatsError.privateGameDetails
             } else {
                 await MainActor.run {
-                    DebugLogger.shared.logStatsError(
+                    DebugLogger.shared.logNetworkError(
                         "GetPlayerSummaries also rejected the API Key (HTTP 403). The Steam Web API Key is invalid.",
                         tag: serviceTag
                     )
@@ -156,7 +156,7 @@ public actor SteamStatsService {
         } catch {
             let errText = error.localizedDescription
             await MainActor.run {
-                DebugLogger.shared.logStatsError("JSON decode error: \(errText)", tag: serviceTag)
+                DebugLogger.shared.logNetworkError("JSON decode error: \(errText)", tag: serviceTag)
             }
             throw SteamStatsError.decodingFailed(errText)
         }

@@ -1,7 +1,7 @@
 import Foundation
 
 extension DebugLogger {
-    public func logStatsNetworkRequest(_ request: URLRequest, tag: String) {
+    public func logNetworkRequest(_ request: URLRequest, tag: String) {
         let method = request.httpMethod ?? "GET"
         let sanitizedURL = APIClient.redact(request.url?.absoluteString ?? "unknown")
         var sanitizedHeaders = request.allHTTPHeaderFields ?? [:]
@@ -11,7 +11,7 @@ extension DebugLogger {
         log("[\(tag)] -> \(method) \(sanitizedURL) | Headers: \(sanitizedHeaders)")
     }
 
-    public func logStatsNetworkResponse(
+    public func logNetworkResponse(
         url: URL?,
         statusCode: Int,
         byteCount: Int,
@@ -27,7 +27,7 @@ extension DebugLogger {
         }
     }
 
-    public func logStatsError(_ message: String, tag: String) {
+    public func logNetworkError(_ message: String, tag: String) {
         log("[\(tag)] ERROR: \(message)")
     }
 }
