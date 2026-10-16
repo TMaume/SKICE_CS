@@ -6,59 +6,41 @@ import Foundation
 public struct ItemInspectionStore: Sendable {
     public static let shared = ItemInspectionStore()
 
-    private let cacheURL: URL?
+    private let cache: JSONFileCache<[String: GCItemInspection]>
 
     public init(cacheURL: URL? = nil) {
-        self.cacheURL = cacheURL ?? Self.defaultCacheURL()
+        if let cacheURL {
+            cache = JSONFileCache(fileURL: cacheURL)
+        } else {
+            cache = JSONFileCache(fileName: "gc-item-inspections.json")
+        }
     }
 
     /// Full cache, keyed by asset id.
-    public func all() -> [String: GCItemInspection] { load() }
+    public func all() -> [String: GCItemInspection] { cache.load() ?? [:] }
 
     public func inspection(forAssetID assetID: String) -> GCItemInspection? {
-        load()[assetID]
+        cache.load()?[assetID]
     }
 
-    public var count: Int { load().count }
+    public var count: Int { cache.load()?.count ?? 0 }
 
     /// Merges freshly fetched inspections, overwriting per asset id.
     public func merge(_ inspections: [GCItemInspection]) {
         guard !inspections.isEmpty else { return }
-        var cache = load()
+        var merged = cache.load() ?? [:]
         for inspection in inspections {
-            cache[inspection.assetID] = inspection
+            merged[inspection.assetID] = inspection
         }
-        save(cache)
+        cache.save(merged)
     }
 
     /// Drops cached entries whose asset id is no longer in the inventory.
     public func prune(keepingAssetIDs ids: Set<String>) {
-        let cache = load()
-        let pruned = cache.filter { ids.contains($0.key) }
-        if pruned.count != cache.count { save(pruned) }
+        let current = cache.load() ?? [:]
+        let pruned = current.filter { ids.contains($0.key) }
+        if pruned.count != current.count { cache.save(pruned) }
     }
 
-    public func removeAll() { save([:]) }
-
-    // MARK: - Persistence
-
-    private func load() -> [String: GCItemInspection] {
-        guard let cacheURL, let data = try? Data(contentsOf: cacheURL) else { return [:] }
-        return (try? JSONDecoder().decode([String: GCItemInspection].self, from: data)) ?? [:]
-    }
-
-    private func save(_ cache: [String: GCItemInspection]) {
-        guard let cacheURL, let data = try? JSONEncoder().encode(cache) else { return }
-        try? data.write(to: cacheURL, options: .atomic)
-    }
-
-    private static func defaultCacheURL() -> URL? {
-        guard let dir = try? FileManager.default.url(
-            for: .cachesDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return dir.appendingPathComponent("gc-item-inspections.json")
-    }
+    public func removeAll() { cache.save([:]) }
 }

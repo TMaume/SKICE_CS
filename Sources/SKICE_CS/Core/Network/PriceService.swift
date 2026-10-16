@@ -73,11 +73,11 @@ public struct PriceService: Sendable {
     private let politenessDelay: Duration = .milliseconds(150)
 
     private let client: APIClient
-    private let cacheURL: URL?
+    private let cache: JSONFileCache<PriceTable>
 
     public init(session: URLSession = .shared) {
         self.client = APIClient(session: session)
-        self.cacheURL = Self.defaultCacheURL()
+        self.cache = JSONFileCache(fileName: "steam-price-table.json")
     }
 
     // MARK: - Public API
@@ -87,7 +87,7 @@ public struct PriceService: Sendable {
     /// item failures — those simply stay absent ("—" in the UI).
     public func loadPriceTable(for hashes: Set<String>, forceRefresh: Bool = false) async throws -> PriceTable {
         let requested = Set(hashes.filter { !$0.isEmpty })
-        let cached = loadCachedTable() ?? .empty
+        let cached = cache.load() ?? .empty
 
         let missing = requested.subtracting(cached.entries.keys)
         let needsFullRefresh = forceRefresh || cached.isStale
@@ -128,7 +128,7 @@ public struct PriceService: Sendable {
         var merged = cached.entries
         for (hash, entry) in fetched { merged[hash] = entry }
         let updated = PriceTable(entries: merged, fetchedAt: Date())
-        saveCachedTable(updated)
+        cache.save(updated)
         return updated
     }
 
@@ -223,27 +223,6 @@ public struct PriceService: Sendable {
         return Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX"))
     }
 
-    // MARK: - On-disk cache
-
-    private func loadCachedTable() -> PriceTable? {
-        guard let cacheURL, let data = try? Data(contentsOf: cacheURL) else { return nil }
-        return try? JSONDecoder().decode(PriceTable.self, from: data)
-    }
-
-    private func saveCachedTable(_ table: PriceTable) {
-        guard let cacheURL, let data = try? JSONEncoder().encode(table) else { return }
-        try? data.write(to: cacheURL, options: .atomic)
-    }
-
-    private static func defaultCacheURL() -> URL? {
-        guard let dir = try? FileManager.default.url(
-            for: .cachesDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return dir.appendingPathComponent("steam-price-table.json")
-    }
 }
 
 // MARK: - Decoding

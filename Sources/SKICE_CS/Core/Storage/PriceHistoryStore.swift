@@ -50,10 +50,14 @@ public struct PriceHistoryStore: Sendable {
     /// Safety cap on retained samples per item (one per day plus headroom).
     public static let maxPointsPerName = 32
 
-    private let cacheURL: URL?
+    private let cache: JSONFileCache<[String: [PriceEntry]]>
 
     public init(cacheURL: URL? = nil) {
-        self.cacheURL = cacheURL ?? Self.defaultCacheURL()
+        if let cacheURL {
+            cache = JSONFileCache(fileURL: cacheURL)
+        } else {
+            cache = JSONFileCache(fileName: "steam-price-history.json")
+        }
     }
 
     // MARK: - Recording
@@ -62,7 +66,7 @@ public struct PriceHistoryStore: Sendable {
     /// refreshes on the same calendar day coalesce into a single (latest) sample.
     public func record(_ entries: [String: PriceEntry]) {
         guard !entries.isEmpty else { return }
-        var series = load()
+        var series = cache.load() ?? [:]
         let now = Date()
         let cutoff = now.addingTimeInterval(-Self.retention)
 
@@ -81,19 +85,19 @@ public struct PriceHistoryStore: Sendable {
             series[hash] = points
         }
 
-        save(series)
+        cache.save(series)
     }
 
     // MARK: - Reading
 
     /// Chronological samples recorded for a single item.
     public func history(for marketHashName: String) -> [PriceEntry] {
-        load()[marketHashName] ?? []
+        cache.load()?[marketHashName] ?? []
     }
 
     /// Full in-memory series, keyed by market_hash_name.
     public func series() -> [String: [PriceEntry]] {
-        load()
+        cache.load() ?? [:]
     }
 
     // MARK: - Derived
@@ -124,28 +128,6 @@ public struct PriceHistoryStore: Sendable {
             : nil
 
         return PriceTrend(days: days, samples: window, latest: latest, baseline: baseline, changePercent: changePercent)
-    }
-
-    // MARK: - Persistence
-
-    private func load() -> [String: [PriceEntry]] {
-        guard let cacheURL, let data = try? Data(contentsOf: cacheURL) else { return [:] }
-        return (try? JSONDecoder().decode([String: [PriceEntry]].self, from: data)) ?? [:]
-    }
-
-    private func save(_ series: [String: [PriceEntry]]) {
-        guard let cacheURL, let data = try? JSONEncoder().encode(series) else { return }
-        try? data.write(to: cacheURL, options: .atomic)
-    }
-
-    private static func defaultCacheURL() -> URL? {
-        guard let dir = try? FileManager.default.url(
-            for: .cachesDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return dir.appendingPathComponent("steam-price-history.json")
     }
 
 }
