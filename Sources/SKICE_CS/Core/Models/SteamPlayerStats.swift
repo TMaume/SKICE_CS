@@ -279,6 +279,42 @@ public enum SteamMapCatalog {
             tacticalProfile: "Counter-Strike competitive map"
         )
     }
+
+    // MARK: - Game Coordinator map id -> map code (PROVISIONAL)
+
+    /// Maps the numeric Game Coordinator `map_id` (PlayerRankingInfo.per_map_rank)
+    /// to a SteamMapCatalog map code.
+    ///
+    /// PROVISIONAL: these numeric ids are best-effort from community references
+    /// and have NOT been confirmed against a live Game Coordinator payload. Treat
+    /// every value as unverified; unknown ids fall back to "Map #<id>" via
+    /// `displayName(forGCID:)` rather than misreporting a wrong map.
+    public static let gcMapIDToCode: [UInt32: String] = [
+        9: "de_dust2",
+        15: "de_nuke",
+        16: "de_inferno",
+        17: "de_train",
+        19: "de_cbble",
+        20: "de_mirage",
+        21: "cs_italy",
+        22: "cs_office",
+        23: "de_overpass",
+        24: "de_vertigo",
+        25: "de_ancient",
+        26: "de_anubis"
+    ]
+
+    /// The SteamMapCatalog map code for a GC map id, or nil when unknown.
+    public static func mapCode(forGCID mapID: UInt32) -> String? {
+        gcMapIDToCode[mapID]
+    }
+
+    /// A human-readable map name for a GC map id. Unknown ids render as
+    /// "Map #<id>" so a provisional mapping can never mislead.
+    public static func displayName(forGCID mapID: UInt32) -> String {
+        guard let code = gcMapIDToCode[mapID] else { return "Map #\(mapID)" }
+        return cleanDisplayName(from: code)
+    }
 }
 
 public enum MapVictoryStatus: String, Codable, Equatable, Sendable {

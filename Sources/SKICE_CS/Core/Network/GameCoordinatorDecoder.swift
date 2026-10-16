@@ -244,6 +244,7 @@ enum GameCoordinatorDecoder {
         var rankIfTie: UInt32 = 0
         var highestRank: UInt32 = 0
         var rankExpiry: UInt32 = 0
+        var perMapRanks: [PerMapRank] = []
 
         var decoder = ProtobufDecoder(data)
         while let (field, wire) = decoder.readTag() {
@@ -276,6 +277,14 @@ enum GameCoordinatorDecoder {
                 if let v = decoder.readVarint() { rankIfLose = UInt32(truncatingIfNeeded: v) }
             case 12: // rank_if_tie
                 if let v = decoder.readVarint() { rankIfTie = UInt32(truncatingIfNeeded: v) }
+            case 13: // per_map_rank (repeated PerMapRank)
+                if wire == 2, var rankDecoder = decoder.readMessage() {
+                    if let perMap = decodePerMapRank(&rankDecoder) {
+                        perMapRanks.append(perMap)
+                    }
+                } else {
+                    decoder.skip(wireType: wire)
+                }
             case 15: // highest_rank
                 if let v = decoder.readVarint() { highestRank = UInt32(truncatingIfNeeded: v) }
             case 16: // rank_expiry
@@ -299,8 +308,30 @@ enum GameCoordinatorDecoder {
             rankIfLose: rankIfLose,
             rankIfTie: rankIfTie,
             highestRank: highestRank,
-            rankExpiry: rankExpiry
+            rankExpiry: rankExpiry,
+            perMapRanks: perMapRanks
         )
+    }
+
+    /// Decodes one PerMapRank (map_id = 1, rank_id = 2, wins = 3).
+    private static func decodePerMapRank(_ decoder: inout ProtobufDecoder) -> PerMapRank? {
+        var mapID: UInt32 = 0
+        var rankID: UInt32 = 0
+        var wins: UInt32 = 0
+        while let (field, wire) = decoder.readTag() {
+            switch field {
+            case 1: // map_id
+                if let v = decoder.readVarint() { mapID = UInt32(truncatingIfNeeded: v) }
+            case 2: // rank_id
+                if let v = decoder.readVarint() { rankID = UInt32(truncatingIfNeeded: v) }
+            case 3: // wins
+                if let v = decoder.readVarint() { wins = UInt32(truncatingIfNeeded: v) }
+            default:
+                decoder.skip(wireType: wire)
+            }
+        }
+        guard mapID != 0 else { return nil }
+        return PerMapRank(mapID: mapID, rankID: rankID, wins: wins)
     }
 
     /// Decodes CMsgGCCStrike15_v2_PlayersProfile (the reply to

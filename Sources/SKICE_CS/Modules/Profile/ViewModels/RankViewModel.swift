@@ -7,12 +7,29 @@ import Observation
 @Observable
 @MainActor
 public final class RankViewModel {
-    public private(set) var currentRanking: PlayerRankingInfo?
+    public private(set) var allRankings: [PlayerRankingInfo] = []
     public private(set) var history: [RatingSnapshot] = []
     public private(set) var isLoading: Bool = false
     public private(set) var errorMessage: String?
     /// When the ranking was last refreshed from the Game Coordinator.
     public private(set) var lastUpdated: Date?
+
+    /// The Premier ladder entry (rank_type_id 11), or the first entry as a
+    /// fallback — keeps the existing Premier card behavior.
+    public var currentRanking: PlayerRankingInfo? {
+        allRankings.first(where: { $0.isPremier }) ?? allRankings.first
+    }
+
+    /// The Wingman ladder entry (rank_type_id 7), or nil when absent.
+    public var wingmanRank: PlayerRankingInfo? {
+        allRankings.first(where: { $0.isWingman })
+    }
+
+    /// The competitive ladder entry (rank_type_id 6), which carries the
+    /// per-map ranks used by the ranked-mode overview.
+    public var competitiveRank: PlayerRankingInfo? {
+        allRankings.first(where: { $0.isCompetitive })
+    }
 
     /// True when the rating should be auto-refreshed: never refreshed yet, or
     /// the last refresh is older than one hour.
@@ -25,7 +42,7 @@ public final class RankViewModel {
     private let store: RatingSnapshotStore
 
     private static func rankingCacheKey(_ steamID64: String) -> String {
-        "com.dtl21.SKICEcs.cachedRanking.v1." + steamID64
+        "com.dtl21.SKICEcs.cachedRanking.v2." + steamID64
     }
 
     private static func updatedAtCacheKey(_ steamID64: String) -> String {
@@ -45,13 +62,13 @@ public final class RankViewModel {
     public func loadHistory(for steamID64: String?) {
         guard let steamID64, !steamID64.isEmpty else {
             history = []
-            currentRanking = nil
+            allRankings = []
             lastUpdated = nil
             return
         }
         history = store.loadSnapshots(for: steamID64)
         if let data = UserDefaults.standard.data(forKey: Self.rankingCacheKey(steamID64)) {
-            currentRanking = try? JSONDecoder().decode(PlayerRankingInfo.self, from: data)
+            allRankings = (try? JSONDecoder().decode([PlayerRankingInfo].self, from: data)) ?? []
         }
         lastUpdated = UserDefaults.standard.object(forKey: Self.updatedAtCacheKey(steamID64)) as? Date
     }
@@ -69,11 +86,13 @@ public final class RankViewModel {
 
         do {
             let entries = try await client.fetchPlayerRanking(steamID64: steamID, refreshToken: refreshToken)
-            let premier = entries.first(where: { $0.isPremier }) ?? entries.first
-            if let premier {
-                currentRanking = premier
-                store.record(steamID64: steamID64, ranking: premier)
-                if let data = try? JSONEncoder().encode(premier) {
+            if !entries.isEmpty {
+                allRankings = entries
+                // Record a Premier snapshot only (history is Premier rating history).
+                if let premier = entries.first(where: { $0.isPremier }) ?? entries.first {
+                    store.record(steamID64: steamID64, ranking: premier)
+                }
+                if let data = try? JSONEncoder().encode(entries) {
                     UserDefaults.standard.set(data, forKey: Self.rankingCacheKey(steamID64))
                 }
             }

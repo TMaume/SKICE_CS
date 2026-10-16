@@ -7,6 +7,24 @@ import Foundation
 /// so they are authoritative. The *semantic* mapping is community-decoded and
 /// marked PROVISIONAL below: it must be confirmed against a live on-device
 /// payload before the number is trusted.
+/// One per-map competitive rank entry, decoded from PlayerRankingInfo field 13
+/// (per_map_rank). Field numbers are authoritative (cstrike15_gcmessages.proto).
+/// The numeric map_id -> name mapping lives in SteamMapCatalog and is
+/// PROVISIONAL: verified only against community references, not a live payload.
+public struct PerMapRank: Codable, Sendable, Equatable {
+    /// Numeric Game Coordinator map id (see SteamMapCatalog.gcMapIDToCode).
+    public let mapID: UInt32
+    /// The 18-tier competitive rank id on this map.
+    public let rankID: UInt32
+    public let wins: UInt32
+
+    public init(mapID: UInt32, rankID: UInt32, wins: UInt32) {
+        self.mapID = mapID
+        self.rankID = rankID
+        self.wins = wins
+    }
+}
+
 public struct PlayerRankingInfo: Codable, Sendable, Equatable {
     public let accountID: UInt32
     /// For Premier this is believed to carry the numeric CS Rating directly.
@@ -24,6 +42,8 @@ public struct PlayerRankingInfo: Codable, Sendable, Equatable {
     public let rankIfTie: UInt32
     public let highestRank: UInt32
     public let rankExpiry: UInt32
+    /// Per-map competitive ranks (field 13). Empty for Premier and Wingman ladders.
+    public let perMapRanks: [PerMapRank]
 
     public init(
         accountID: UInt32,
@@ -37,7 +57,8 @@ public struct PlayerRankingInfo: Codable, Sendable, Equatable {
         rankIfLose: UInt32,
         rankIfTie: UInt32,
         highestRank: UInt32,
-        rankExpiry: UInt32
+        rankExpiry: UInt32,
+        perMapRanks: [PerMapRank] = []
     ) {
         self.accountID = accountID
         self.rankID = rankID
@@ -51,12 +72,19 @@ public struct PlayerRankingInfo: Codable, Sendable, Equatable {
         self.rankIfTie = rankIfTie
         self.highestRank = highestRank
         self.rankExpiry = rankExpiry
+        self.perMapRanks = perMapRanks
     }
 
     /// PROVISIONAL: CS2's Premier ladder is rank_type_id 11 (community-decoded;
     /// confirm on a live payload). For Premier, rankID is believed to hold the
     /// numeric CS Rating directly.
     public var isPremier: Bool { rankTypeID == 11 }
+
+    /// PROVISIONAL: CS2's competitive ladder is rank_type_id 6 (community-decoded).
+    public var isCompetitive: Bool { rankTypeID == 6 }
+
+    /// PROVISIONAL: CS2's Wingman ladder is rank_type_id 7 (community-decoded).
+    public var isWingman: Bool { rankTypeID == 7 }
 
     /// The numeric Premier rating, or nil for non-Premier ladders.
     public var premierRating: Int? {
