@@ -685,9 +685,9 @@ public actor GameCoordinatorClient {
             switch field {
             case 1: // id
                 if let value = decoder.readVarint() { id = value }
-            case 3: // def_index
+            case 4: // def_index
                 if let value = decoder.readVarint() { defIndex = UInt32(truncatingIfNeeded: value) }
-            case 4: // attributes (repeated CSOEconItemAttribute)
+            case 12: // attribute (repeated CSOEconItemAttribute)
                 if wire == 2, var attrDecoder = decoder.readMessage() {
                     decodeAttribute(&attrDecoder, into: &attrs)
                 } else {
