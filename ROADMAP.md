@@ -49,7 +49,7 @@ Note: the Web API inventory reader requires a public Steam profile; private inve
 |---|---|---|---|
 | M0 | Profile / Home | Delivered | A |
 | M1 | Remote Match | Placeholder | A |
-| M2 | Loadout (GC) | Placeholder — blocked | B |
+| M2 | Loadout (GC) | Scrapped | B |
 | M3 | Inventory & Economy | Delivered (partial) | A (+B for Float/Seed) |
 | M4 | Stats | Delivered (partial) | A |
 | M5 | Tactics | Placeholder | A |
@@ -67,11 +67,9 @@ Live match pipeline on the gaming PC:
 - Forward to the iPhone via APNs.
 - Must stay VAC-safe / read-only; never inject into the game.
 
-### M2 — Loadout (GC) — blocked by Tier B
+### M2 — Loadout (GC) — SCRAPPED
 
-- Read/write Loadouts via Game Coordinator Protobuf packets.
-- Requires a real Steam session (OAuth / Steam Guard) and Steam item session tokens.
-- Explicit prerequisite: Tier B "Auth session Steam". Not schedulable before that.
+The read-only GC Loadout (equip-slot) feature was built, then scrapped by the owner (2026-10-16) as unusable. The GC session, protobuf framing and attribute decode were reused for the Inspect (float / seed / stickers) feature; scrapped files are parked in /tmp/skice-scrapped.
 
 ### M3 — Inventory & Economy (delivered, partial)
 
@@ -123,8 +121,8 @@ CS2 Game State Integration (GSI) only emits locally. To use it on the phone:
 1. Price history (Steam EUR) — builds on M3.
 2. Trade-Up simulator (EV/ROI) — delivered.
 3. BLOCKING MILESTONE — Auth session Steam (OAuth / Steam Guard). ✔ delivered 2026-10-16.
-4. GC Protobuf: Loadouts — unblocked (auth milestone done).
-5. GC Inspect: Float / Seed / Stickers — unblocked (auth milestone done).
+4. GC Protobuf: Loadouts — scrapped (unusable).
+5. GC Inspect: Float / Seed / Stickers — delivered.
 
 ### Phase 3 — Desktop Daemon
 
@@ -195,14 +193,19 @@ DELIVERED
 - Trade-Up: Valve engine (majority collection, R -> R+1, normalized average float, all-or-nothing StatTrak, souvenir rejected), EV/ROI EUR, embedded local catalog.
 - Stats: Steam Web API (career) + FACEIT v4 (history / ELO), local snapshot.
 - Logging: DebugLogger + Developer Mode.
+- GC Inspect: exact wear float / pattern seed / StatTrak kills / applied stickers, read from the Game Coordinator (Tier B) and cached on-device (ItemInspectionStore).
 
 NOT STARTED (empty placeholders)
 
-- Loadout (GC), Remote Match (daemon + APNs), Tactics (lineups / economy), Demo Parser.
+- Remote Match / M1 (daemon + APNs), Tactics / M5 (lineups / economy), Demo Parser.
 
-UNBLOCKED
+SCRAPPED
 
-- Game Coordinator (Loadouts, Inspect Float / Seed / Stickers): the "Auth session Steam" milestone is delivered, so GC protobuf work can now proceed.
+- Loadout / M2 (GC equip slots) — unusable; superseded by GC Inspect.
+
+CORE REFACTOR (2026-10-16)
+
+- Open-source readability pass: dead code removed; Core no longer depends on Modules; stores split from models; duplicated logic deduped (SteamID64 validator, UTC day-bucket, JSON file cache); GC protobuf decode extracted; doc comments normalised; logging helpers renamed.
 
 ---
 
@@ -214,3 +217,26 @@ UNBLOCKED
 - ADR-04 Zero-trust: no intermediary infra, no credential relay; everything stays on-device.
 - ADR-05 Phase 2 order: Economy / Trade-up BEFORE GC (GC is blocked by auth).
 - ADR-06 Toolchain: xtool / SwiftPM, no Xcode / .xcodeproj; SPM dependencies minimal (currently 0).
+
+---
+
+## 9. Backlog — porting ideas from Recon Bolt (Valorant companion)
+
+Reference: Recon-Bolt — a Valorant companion app (open-source), cloned at /home/dtl21/Documents/Recon-Bolt. Reviewed 2026-10-16. Its UI/UX patterns port; its third-party packages (HandyOperators, UserDefault) are NOT adopted (ADR-06: zero SPM deps). Roughly in priority order.
+
+1. Image caching (M3). SKICE_CS grids use bare `AsyncImage`; Recon Bolt has a dedicated `ImageManager`: an actor that deduplicates concurrent downloads, a size-capped in-memory cache (256x256 px) falling back to disk for large images, version-aware re-download via sidecar metadata, and 50 ms-batched UI updates. Port the pattern for Steam CDN thumbnails to kill grid-scroll jank on large inventories. Still zero-trust (images come straight from Steam).
+2. Rank / rating tracking + widgets (M0). Recon Bolt's origin feature: track competitive rank over time (`RankInfoView`, `ActRankView`) plus home-screen widgets. CS2 analog: track CS Rating / Premier rating history and ship a WidgetKit widget. New capability — no equivalent today.
+3. Live-match UI (M1, Phase 3). Recon Bolt `LiveMatchView`: a map-splash hero (200 pt, material overlay, mode label) over a team-grouped player list with agent icon + rank badge. Template for a CS2 live scoreboard + round-kill feed (GSI / NetCon).
+4. Stats visualisations (M4). Win-rate, hit-distribution heatmap, playtime. CS2 additions: per-map win rate, hit distribution, playtime.
+5. Reference tab (M5 Tactics). Recon Bolt `AgentInfoView` / `WeaponInfoView`: offline, browsable reference. Template for a weapon / map / callout reference tab.
+6. Localisation infrastructure. Recon Bolt is fully localised (`String(localized:comment:)`, .lproj, Crowdin, 22 languages). SKICE_CS is English-only. First step: extract user-facing strings into a Localizable catalog (English only) so it is translation-ready. Large diff — treat as its own phase.
+7. Small wins. `@SceneStorage` tab persistence; a reusable `CircularProgressView`; a storage-management screen (show + clear each cache); a screenshot privacy toggle (Recon Bolt's `AnonymizationMode`).
+
+### 9.1 Armory pass vs. Night Market — feasibility
+
+Recon Bolt's Night Market is a live, per-account, rotating discounted store fetched from Riot's API after login (`client.getStorefront()`; `Storefront.NightMarket` with `discountPercent` + `remainingDuration`, alongside the daily store, featured bundles and the accessory store).
+
+CS2's Armory is a different shape: a pass + Armory Stars + a redeem store. There is no first-party Web API for it, and a player's personalised state (Stars balance, redeemed items, current featured offers) is not exposed. Only the catalogue (collections, items, Star prices) is bakeable, like the trade-up catalogue (ADR-03).
+
+- Feasible (zero-trust): a read-only Armory catalogue view from baked data, cross-referenced against the GC inventory cache (already available) to flag Armory items you own.
+- Not feasible like the Night Market: a live, personalised Armory. Whether undocumented Game Coordinator Armory messages exist is unverified and would need reverse-engineering.
