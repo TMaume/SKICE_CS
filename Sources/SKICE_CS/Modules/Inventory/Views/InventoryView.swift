@@ -3,6 +3,7 @@ import SwiftUI
 /// Main CS2 Inventory screen supporting Grid/List toggles, rarity colors, verified trade-lock / untradable badges, and conditional debug access.
 public struct InventoryView: View {
     public let steamID64: String
+    let authSession: SteamAuthSession
 
     @AppStorage("isDeveloperModeEnabled") private var isDeveloperModeEnabled: Bool = false
 
@@ -19,9 +20,11 @@ public struct InventoryView: View {
 
     public init(
         steamID64: String,
+        authSession: SteamAuthSession,
         viewModel: InventoryViewModel = InventoryViewModel()
     ) {
         self.steamID64 = steamID64
+        self.authSession = authSession
         self._viewModel = State(initialValue: viewModel)
     }
 
@@ -79,7 +82,7 @@ public struct InventoryView: View {
             InventoryFilterSheet(viewModel: viewModel)
         }
         .sheet(item: $selectedItemForDetail) { item in
-            SkinDetailSheet(item: item, price: viewModel.price(for: item))
+            SkinDetailSheet(item: item, price: viewModel.price(for: item), inspection: viewModel.inspection(for: item))
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -103,6 +106,7 @@ public struct InventoryView: View {
         }
         .task(id: steamID64) {
             await viewModel.loadInventory(for: steamID64)
+            await viewModel.loadInspections(authSession: authSession)
         }
         .preferredColorScheme(.dark)
     }
@@ -244,7 +248,7 @@ public struct InventoryView: View {
                     if isGridView {
                         LazyVGrid(columns: gridColumns, spacing: 12) {
                             ForEach(viewModel.filteredItems) { item in
-                                SkinGridCard(item: item, price: viewModel.price(for: item))
+                                SkinGridCard(item: item, price: viewModel.price(for: item), inspection: viewModel.inspection(for: item))
                                     .onTapGesture {
                                         selectedItemForDetail = item
                                     }
@@ -253,7 +257,7 @@ public struct InventoryView: View {
                     } else {
                         LazyVStack(spacing: 8) {
                             ForEach(viewModel.filteredItems) { item in
-                                SkinListRow(item: item, price: viewModel.price(for: item))
+                                SkinListRow(item: item, price: viewModel.price(for: item), inspection: viewModel.inspection(for: item))
                                     .onTapGesture {
                                         selectedItemForDetail = item
                                     }
@@ -265,6 +269,7 @@ public struct InventoryView: View {
             }
             .refreshable {
                 await viewModel.loadInventory(for: steamID64, forceRefresh: true)
+                await viewModel.loadInspections(authSession: authSession, forceRefresh: true)
             }
         }
     }
@@ -335,6 +340,7 @@ public struct InventoryView: View {
 private struct SkinGridCard: View {
     let item: SkinItem
     let price: PriceEntry?
+    let inspection: GCItemInspection?
 
     private var rarityColor: Color {
         AppTheme.rarityColor(for: item.rarity, hexOverride: item.rarityColorHex)
@@ -472,6 +478,16 @@ private struct SkinGridCard: View {
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
             }
             .foregroundStyle(price == nil ? AppTheme.Colors.textSecondary : AppTheme.Colors.statusSuccess)
+
+            if let wear = inspection?.wearText {
+                HStack(spacing: 4) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 8, weight: .bold))
+                    Text(wear)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                }
+                .foregroundStyle(AppTheme.Colors.ctBlue)
+            }
         }
         .padding(10)
         .background(
@@ -495,6 +511,7 @@ private struct SkinGridCard: View {
 private struct SkinListRow: View {
     let item: SkinItem
     let price: PriceEntry?
+    let inspection: GCItemInspection?
 
     private var rarityColor: Color {
         AppTheme.rarityColor(for: item.rarity, hexOverride: item.rarityColorHex)
@@ -549,6 +566,12 @@ private struct SkinListRow: View {
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(rarityColor)
 
+                    if let wear = inspection?.wearText {
+                        Text(wear)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(AppTheme.Colors.ctBlue)
+                    }
+
                     if let tradeBadge = item.tradeStatus.badgeLabel {
                         HStack(spacing: 3) {
                             Image(systemName: item.isOnTradeCooldown ? "clock.fill" : "lock.fill")
@@ -601,6 +624,7 @@ private struct SkinListRow: View {
 private struct SkinDetailSheet: View {
     let item: SkinItem
     let price: PriceEntry?
+    let inspection: GCItemInspection?
     @Environment(\.dismiss) private var dismiss
     @AppStorage("isDeveloperModeEnabled") private var isDeveloperModeEnabled: Bool = false
     @State private var isShowingMarketSheet: Bool = false
@@ -665,6 +689,33 @@ private struct SkinDetailSheet: View {
                             valueColor: AppTheme.exteriorColor(for: item.exterior)
                         )
                         detailRow(label: "Category", value: item.categoryType)
+
+                        if let inspection {
+                            detailRow(
+                                label: "Float",
+                                value: inspection.wearText ?? "—",
+                                valueColor: AppTheme.Colors.ctBlue,
+                                isMonospaced: true
+                            )
+                            detailRow(
+                                label: "Pattern Seed",
+                                value: inspection.paintSeed.map { "#\($0)" } ?? "—",
+                                isMonospaced: inspection.paintSeed != nil
+                            )
+                            if inspection.isStatTrak, let kills = inspection.killEaterValue {
+                                detailRow(
+                                    label: "StatTrak Kills",
+                                    value: "\(kills)",
+                                    valueColor: AppTheme.statTrakOrange,
+                                    isMonospaced: true
+                                )
+                            }
+                            detailRow(
+                                label: "Stickers",
+                                value: inspection.hasStickers ? "\(inspection.stickers.count)" : "None",
+                                valueColor: inspection.hasStickers ? AppTheme.Colors.csOrange : AppTheme.Colors.textSecondary
+                            )
+                        }
                         detailRow(
                             label: "Trade Status",
                             value: item.tradeStatus.detailedDescription,

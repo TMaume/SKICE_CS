@@ -32,6 +32,13 @@ public final class InventoryViewModel {
     public private(set) var currentError: SteamInventoryError?
     public private(set) var lastLoadedSteamID: String?
 
+    /// Game Coordinator inspections (float / seed / stickers), keyed by asset id.
+    public private(set) var inspections: [String: GCItemInspection] = [:]
+    /// True while a fresh Game Coordinator read is in flight.
+    public private(set) var isFetchingInspections: Bool = false
+    /// Last inspection read error, if any.
+    public private(set) var inspectionError: String?
+
     // MARK: - Search & Filter Controls
 
     public var searchText: String = "" { didSet { recomputeDerivedState() } }
@@ -45,16 +52,22 @@ public final class InventoryViewModel {
     // MARK: - Dependencies
 
     private let service: SteamInventoryServicing
+    private let inspectionStore: ItemInspectionStore
+    private let gcClient: GameCoordinatorClient
 
     /// Shared Steam Market price store for the items in this inventory.
     public let priceStore: PriceStore
 
     public init(
         service: SteamInventoryServicing = SteamInventoryService(),
-        priceStore: PriceStore = PriceStore()
+        priceStore: PriceStore = PriceStore(),
+        inspectionStore: ItemInspectionStore = .shared,
+        gcClient: GameCoordinatorClient = .shared
     ) {
         self.service = service
         self.priceStore = priceStore
+        self.inspectionStore = inspectionStore
+        self.gcClient = gcClient
     }
 
     // MARK: - Cached Derived State
@@ -173,6 +186,47 @@ public final class InventoryViewModel {
             let snapshot = items
             let store = priceStore
             Task { await store.loadPrices(for: snapshot) }
+        }
+    }
+
+    // MARK: - Game Coordinator inspections (float / seed / stickers)
+
+    /// GC inspection for an item (exact float, pattern seed, stickers), or nil.
+    public func inspection(for item: SkinItem) -> GCItemInspection? {
+        inspections[item.assetId]
+    }
+
+    /// Loads item inspections: instantly from the on-device cache, then a fresh
+    /// read from the Game Coordinator when a signed-in Tier B session exists.
+    /// The public Web API cannot provide float, so this needs the GC session.
+    public func loadInspections(authSession: SteamAuthSession, forceRefresh: Bool = false) async {
+        if inspections.isEmpty || forceRefresh {
+            inspections = inspectionStore.all()
+        }
+
+        guard let credentials = authSession.gameCoordinatorCredentials(),
+              let steamID = UInt64(credentials.steamID64) else {
+            return
+        }
+        guard !isFetchingInspections else { return }
+
+        isFetchingInspections = true
+        inspectionError = nil
+        defer { isFetchingInspections = false }
+
+        do {
+            let fetched = try await gcClient.fetchItemInspections(
+                steamID64: steamID,
+                refreshToken: credentials.refreshToken
+            )
+            inspectionStore.merge(fetched)
+            inspections = inspectionStore.all()
+            DebugLogger.shared.info(
+                "Inventory inspections: fetched \(fetched.count), cached \(inspections.count)",
+                category: "Inventory"
+            )
+        } catch {
+            inspectionError = error.localizedDescription
         }
     }
 

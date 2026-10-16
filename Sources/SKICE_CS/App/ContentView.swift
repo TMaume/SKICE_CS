@@ -27,7 +27,7 @@ public struct ContentView: View {
             // TAB 2: CS2 Inventory
             NavigationStack {
                 if let steamID64 = sessionStore.storedSteamID64, !steamID64.isEmpty {
-                    InventoryView(steamID64: steamID64)
+                    InventoryView(steamID64: steamID64, authSession: authSession)
                 } else {
                     missingSteamIDPlaceholder
                 }

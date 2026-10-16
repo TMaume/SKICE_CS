@@ -81,6 +81,15 @@ public final class SteamAuthSession {
         store.hasPersistedSession
     }
 
+    /// Credentials the Game Coordinator logon needs: the session SteamID64 and
+    /// the stored refresh token (the JWT the CM accepts in CMsgClientLogon's
+    /// access_token field). Returns nil when the session is absent or incomplete.
+    public func gameCoordinatorCredentials() -> (steamID64: String, refreshToken: String)? {
+        guard let steamID = store.sessionSteamID64, !steamID.isEmpty,
+              let refresh = store.refreshToken, !refresh.isEmpty else { return nil }
+        return (steamID, refresh)
+    }
+
     /// Remembered login account name (quick re-connect), from the Keychain.
     public var rememberedAccountName: String? { store.rememberedAccountName }
 
