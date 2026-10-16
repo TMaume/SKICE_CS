@@ -125,18 +125,15 @@ public final class SteamSessionStore {
         defer { isLoadingNetwork = false }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                errorMessage = "Invalid HTTP response from Steam."
+            let request = APIClient.makeRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+            let response = try await APIClient.shared.send(request)
+
+            guard (200...299).contains(response.statusCode) else {
+                errorMessage = "Steam Web API returned HTTP \(response.statusCode). Verify your API key."
                 return
             }
 
-            guard (200...299).contains(httpResponse.statusCode) else {
-                errorMessage = "Steam Web API returned HTTP \(httpResponse.statusCode). Verify your API key."
-                return
-            }
-
-            let decoded = try JSONDecoder().decode(SteamPlayerSummariesEnvelope.self, from: data)
+            let decoded = try JSONDecoder().decode(SteamPlayerSummariesEnvelope.self, from: response.data)
             guard let player = decoded.response.players.first else {
                 errorMessage = "No player summary found for SteamID64 \(steamID)."
                 return
