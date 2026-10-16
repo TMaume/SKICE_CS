@@ -26,9 +26,12 @@ public final class RankViewModel {
     }
 
     /// The competitive ladder entry (rank_type_id 6), which carries the
-    /// per-map ranks used by the ranked-mode overview.
+    /// per-map ranks used by the ranked-mode overview. Falls back to whichever
+    /// entry actually carries per-map ranks, in case the provisional
+    /// rank_type_id mapping is off.
     public var competitiveRank: PlayerRankingInfo? {
         allRankings.first(where: { $0.isCompetitive })
+            ?? allRankings.first(where: { !$0.perMapRanks.isEmpty })
     }
 
     /// True when the rating should be auto-refreshed: never refreshed yet, or
