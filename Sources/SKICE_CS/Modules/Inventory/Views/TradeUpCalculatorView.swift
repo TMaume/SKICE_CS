@@ -332,7 +332,7 @@ private struct TradeUpInputCard: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(rarityColor.opacity(0.12))
-                    AsyncImage(url: item.iconURL) { phase in
+                    CachedAsyncImage(url: item.iconURL) { phase in
                         switch phase {
                         case .empty:
                             ProgressView()

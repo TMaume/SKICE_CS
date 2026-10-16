@@ -432,7 +432,7 @@ private struct SkinGridCard: View {
                     )
                     .frame(height: 95)
 
-                AsyncImage(url: item.iconURL) { phase in
+                CachedAsyncImage(url: item.iconURL) { phase in
                     switch phase {
                     case .empty:
                         ProgressView()
@@ -532,7 +532,7 @@ private struct SkinListRow: View {
                 .fill(rarityColor)
                 .frame(width: 4, height: 52)
 
-            AsyncImage(url: item.iconURL) { phase in
+            CachedAsyncImage(url: item.iconURL) { phase in
                 if let image = phase.image {
                     image
                         .resizable()
@@ -654,7 +654,7 @@ private struct SkinDetailSheet: View {
                             )
                             .frame(height: 180)
 
-                        AsyncImage(url: item.iconURL) { phase in
+                        CachedAsyncImage(url: item.iconURL) { phase in
                             if let image = phase.image {
                                 image
                                     .resizable()
