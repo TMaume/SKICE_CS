@@ -202,4 +202,104 @@ enum GameCoordinatorDecoder {
         }
         return nil
     }
+
+    // MARK: - Ranking decode (MatchmakingGC2ClientHello)
+
+    /// Decodes CMsgGCCStrike15_v2_MatchmakingGC2ClientHello into ranked-ladder
+    /// entries. Field 7 holds a single ranking and field 20 a repeated list;
+    /// both are PlayerRankingInfo messages.
+    static func decodeMatchmakingHello(_ data: Data) -> [PlayerRankingInfo] {
+        var rankings: [PlayerRankingInfo] = []
+        var decoder = ProtobufDecoder(data)
+        while let (field, wire) = decoder.readTag() {
+            switch field {
+            case 7, 20:
+                if wire == 2, let bytes = decoder.readLengthDelimited() {
+                    if let info = decodePlayerRankingInfo(bytes) {
+                        rankings.append(info)
+                    }
+                } else {
+                    decoder.skip(wireType: wire)
+                }
+            default:
+                decoder.skip(wireType: wire)
+            }
+        }
+        return rankings
+    }
+
+    /// Decodes a single PlayerRankingInfo message. Field numbers are
+    /// authoritative (cstrike15_gcmessages.proto); the meaning of rank_type_id
+    /// and rank_id is provisional until confirmed on-device.
+    private static func decodePlayerRankingInfo(_ data: Data) -> PlayerRankingInfo? {
+        var accountID: UInt32 = 0
+        var rankID: UInt32 = 0
+        var wins: UInt32 = 0
+        var rankChange: Float = 0
+        var rankTypeID: UInt32 = 0
+        var rankWindowStats: UInt64 = 0
+        var leaderboardName: String?
+        var rankIfWin: UInt32 = 0
+        var rankIfLose: UInt32 = 0
+        var rankIfTie: UInt32 = 0
+        var highestRank: UInt32 = 0
+        var rankExpiry: UInt32 = 0
+
+        var decoder = ProtobufDecoder(data)
+        while let (field, wire) = decoder.readTag() {
+            switch field {
+            case 1: // account_id
+                if let v = decoder.readVarint() { accountID = UInt32(truncatingIfNeeded: v) }
+            case 2: // rank_id
+                if let v = decoder.readVarint() { rankID = UInt32(truncatingIfNeeded: v) }
+            case 3: // wins
+                if let v = decoder.readVarint() { wins = UInt32(truncatingIfNeeded: v) }
+            case 4: // rank_change (float, fixed32)
+                if wire == 5, let v = decoder.readFixed32() {
+                    rankChange = Float(bitPattern: v)
+                } else {
+                    decoder.skip(wireType: wire)
+                }
+            case 6: // rank_type_id
+                if let v = decoder.readVarint() { rankTypeID = UInt32(truncatingIfNeeded: v) }
+            case 8: // rank_window_stats (uint64)
+                if let v = decoder.readVarint() { rankWindowStats = v }
+            case 9: // leaderboard_name (string)
+                if wire == 2, let s = decoder.readString() {
+                    leaderboardName = s
+                } else {
+                    decoder.skip(wireType: wire)
+                }
+            case 10: // rank_if_win
+                if let v = decoder.readVarint() { rankIfWin = UInt32(truncatingIfNeeded: v) }
+            case 11: // rank_if_lose
+                if let v = decoder.readVarint() { rankIfLose = UInt32(truncatingIfNeeded: v) }
+            case 12: // rank_if_tie
+                if let v = decoder.readVarint() { rankIfTie = UInt32(truncatingIfNeeded: v) }
+            case 15: // highest_rank
+                if let v = decoder.readVarint() { highestRank = UInt32(truncatingIfNeeded: v) }
+            case 16: // rank_expiry
+                if let v = decoder.readVarint() { rankExpiry = UInt32(truncatingIfNeeded: v) }
+            default:
+                decoder.skip(wireType: wire)
+            }
+        }
+
+        guard accountID != 0 else { return nil }
+
+        return PlayerRankingInfo(
+            accountID: accountID,
+            rankID: rankID,
+            wins: wins,
+            rankChange: rankChange,
+            rankTypeID: rankTypeID,
+            rankWindowStats: rankWindowStats,
+            leaderboardName: leaderboardName,
+            rankIfWin: rankIfWin,
+            rankIfLose: rankIfLose,
+            rankIfTie: rankIfTie,
+            highestRank: highestRank,
+            rankExpiry: rankExpiry
+        )
+    }
 }

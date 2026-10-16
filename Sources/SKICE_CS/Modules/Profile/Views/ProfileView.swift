@@ -8,6 +8,7 @@ public struct ProfileView: View {
     let statsModel: StatsViewModel
     let authSession: SteamAuthSession
     @Binding var selectedTab: AppTab
+    @State private var rankModel = RankViewModel()
 
     public init(
         sessionStore: SteamSessionStore,
@@ -30,6 +31,7 @@ public struct ProfileView: View {
                 VStack(spacing: 16) {
                     identityCard
                     connectionStatusCard
+                    premierRankCard
 
                     if let stats = statsModel.overviewStats {
                         careerSnapshot(stats)
@@ -57,6 +59,7 @@ public struct ProfileView: View {
             await statsModel.refreshStats(explicitSteamID64: sessionStore.storedSteamID64)
         }
         .task(id: sessionStore.storedSteamID64) {
+            rankModel.loadHistory(for: sessionStore.storedSteamID64)
             await statsModel.loadStatsIfNeeded(explicitSteamID64: sessionStore.storedSteamID64)
         }
     }
@@ -319,6 +322,132 @@ public struct ProfileView: View {
         .frame(maxWidth: .infinity)
         .padding(20)
         .tacticalCard()
+    }
+
+    // MARK: - Premier rating (GC, Tier B)
+
+    private var premierRankCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("PREMIER RATING")
+                    .font(AppTheme.Fonts.sectionTitle)
+                    .foregroundStyle(AppTheme.Colors.csOrange)
+                Spacer()
+                Button {
+                    Task { await syncRank() }
+                } label: {
+                    if rankModel.isLoading {
+                        ProgressView().tint(AppTheme.Colors.csOrange)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.Colors.csOrange)
+                    }
+                }
+                .disabled(rankModel.isLoading || !authSession.isSignedIn)
+                .accessibilityLabel("Sync Premier rating")
+            }
+
+            if let rating = rankModel.currentRanking?.premierRating {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(String(rating))
+                        .font(.system(size: 34, weight: .bold, design: .monospaced))
+                        .foregroundStyle(ratingBandColor(rating))
+
+                    if let change = rankModel.currentRanking?.rankChange, change != 0 {
+                        Label(
+                            String(format: "%+.0f", Double(change)),
+                            systemImage: change > 0 ? "arrow.up.right" : "arrow.down.right"
+                        )
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(change > 0 ? AppTheme.Colors.statusSuccess : AppTheme.Colors.statusDanger)
+                    }
+
+                    if let wins = rankModel.currentRanking?.wins, wins > 0 {
+                        Text("\(wins) wins")
+                            .font(AppTheme.Fonts.captionMono)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    }
+                }
+
+                ratingSparkline
+            } else if rankModel.isLoading {
+                HStack(spacing: 8) {
+                    ProgressView().tint(AppTheme.Colors.csOrange)
+                    Text("Reading rank from the Game Coordinator…")
+                        .font(AppTheme.Fonts.captionMono)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+            } else {
+                Text(authSession.isSignedIn
+                     ? "Tap refresh to read your Premier rating. Steam must be closed on other devices."
+                     : "Sign in to Steam (Settings) to read your Premier rating.")
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+
+            if let error = rankModel.errorMessage {
+                Text(error)
+                    .font(AppTheme.Fonts.captionMono)
+                    .foregroundStyle(AppTheme.Colors.statusDanger)
+                    .lineLimit(2)
+            }
+        }
+        .tacticalCard(accentBorder: AppTheme.Colors.csOrange.opacity(0.3))
+    }
+
+    @ViewBuilder
+    private var ratingSparkline: some View {
+        let history = rankModel.history
+        if history.count >= 2 {
+            GeometryReader { geo in
+                let points = Self.sparklinePoints(history.map { Double($0.rating) }, in: geo.size)
+                Path { path in
+                    for (i, p) in points.enumerated() {
+                        if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                    }
+                }
+                .stroke(
+                    AppTheme.Colors.csOrange,
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                )
+            }
+            .frame(height: 40)
+            .accessibilityLabel("Rating history from \(history.first?.rating ?? 0) to \(history.last?.rating ?? 0)")
+        }
+    }
+
+    private func syncRank() async {
+        guard let creds = authSession.gameCoordinatorCredentials() else { return }
+        rankModel.loadHistory(for: creds.steamID64)
+        await rankModel.refresh(steamID64: creds.steamID64, refreshToken: creds.refreshToken)
+    }
+
+    private static func sparklinePoints(_ values: [Double], in size: CGSize) -> [CGPoint] {
+        guard values.count > 1, let minV = values.min(), let maxV = values.max() else { return [] }
+        let range = max(maxV - minV, 1)
+        let step = size.width / CGFloat(values.count - 1)
+        return values.enumerated().map { i, v in
+            CGPoint(
+                x: CGFloat(i) * step,
+                y: size.height - CGFloat((v - minV) / range) * size.height
+            )
+        }
+    }
+
+    /// Community-reported Premier band thresholds (shattered.io, 2026); not
+    /// official Valve data. Gray < 5k, light blue 5-10k, blue 10-15k,
+    /// purple 15-20k, pink 20-25k, red 25-30k, gold 30k+.
+    private func ratingBandColor(_ rating: Int) -> Color {
+        switch rating {
+        case ..<5_000: return Color(white: 0.55)
+        case ..<10_000: return Color(red: 0.35, green: 0.78, blue: 0.95)
+        case ..<15_000: return Color(red: 0.25, green: 0.5, blue: 1.0)
+        case ..<20_000: return Color(red: 0.6, green: 0.35, blue: 0.95)
+        case ..<25_000: return Color(red: 0.95, green: 0.4, blue: 0.65)
+        case ..<30_000: return Color(red: 0.95, green: 0.25, blue: 0.25)
+        default: return Color(red: 0.95, green: 0.75, blue: 0.2)
+        }
     }
 
     private var inventoryTile: some View {

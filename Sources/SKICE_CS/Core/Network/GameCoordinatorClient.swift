@@ -133,6 +133,8 @@ public actor GameCoordinatorClient {
     private static let emsgClientFromGC: UInt32 = 5453
     private static let emsgGCClientHello: UInt32 = 4006
     private static let emsgGCClientWelcome: UInt32 = 4004
+    private static let emsgMatchmakingClient2GCHello: UInt32 = 9109
+    private static let emsgMatchmakingGC2ClientHello: UInt32 = 9110
     private static let emsgMulti: UInt32 = 1
 
     private static let cs2AppID: UInt32 = 730
@@ -190,6 +192,48 @@ public actor GameCoordinatorClient {
 
         gcInfo("GC awaiting ClientWelcome")
         return try await awaitWelcomeAndDecode()
+    }
+
+    /// Connects, logs on, then requests and decodes the player's ranked ladders
+    /// (Premier / competitive / wingman). Read-only: it only sends the logon,
+    /// heartbeat, now-playing, hello, and matchmaking-hello messages.
+    public func fetchPlayerRanking(steamID64: UInt64, refreshToken: String) async throws -> [PlayerRankingInfo] {
+        defer { teardown() }
+        currentSteamID = steamID64
+        currentSessionID = 0
+
+        gcInfo("GC ranking start: steamID64=\(steamID64)")
+        Self.logTokenClaims(refreshToken)
+
+        let endpoint = try await Self.fetchCMWebSocketEndpoint()
+        gcInfo("GC ranking using CM endpoint \(endpoint)")
+        guard let url = URL(string: "wss://" + endpoint + "/cmsocket/") else {
+            throw GameCoordinatorError.noCMReachable
+        }
+
+        let delegate = GCWebSocketSessionDelegate()
+        let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = false
+        configuration.timeoutIntervalForRequest = 30
+        let urlSession = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+        sessionDelegate = delegate
+        session = urlSession
+
+        let ws = urlSession.webSocketTask(with: url)
+        socket = ws
+        ws.resume()
+
+        gcInfo("GC ranking sending ClientLogon")
+        try await sendLogon(refreshToken: refreshToken)
+        let heartbeatSeconds = try await awaitLogonResponse()
+        startHeartbeat(interval: max(heartbeatSeconds, 10))
+
+        try await sendGamesPlayed()
+        try await sendGCHello()
+        try await sendMatchmakingClient2GCHello()
+
+        gcInfo("GC ranking awaiting MatchmakingGC2ClientHello")
+        return try await awaitRankingAndDecode()
     }
 
     // MARK: - Token diagnostics
@@ -291,6 +335,27 @@ public actor GameCoordinatorClient {
         gcMessage.writeUInt64(1, UInt64(Self.cs2AppID))                       // appid
         gcMessage.writeUInt64(2, UInt64(Self.emsgGCClientHello | Self.protoMask)) // msgtype
         gcMessage.writeBytes(3, inner)                                        // payload
+
+        try await send(
+            Self.emsgClientToGC,
+            header: Self.header(steamID64: currentSteamID, sessionID: currentSessionID, routingAppID: Self.cs2AppID),
+            body: gcMessage
+        )
+    }
+
+    /// Sends the empty CMsgGCCStrike15_v2_MatchmakingClient2GCHello, which asks
+    /// the GC for the player's account data (ranking). The GC answers with
+    /// MatchmakingGC2ClientHello (9110).
+    private func sendMatchmakingClient2GCHello() async throws {
+        // Inner framed GC payload: [uint32 msgtype|mask][uint32 headerLen=0][empty body]
+        var inner = Data()
+        inner.appendUInt32LE(Self.emsgMatchmakingClient2GCHello | Self.protoMask)
+        inner.appendUInt32LE(0)
+
+        var gcMessage = ProtobufEncoder()
+        gcMessage.writeUInt64(1, UInt64(Self.cs2AppID))
+        gcMessage.writeUInt64(2, UInt64(Self.emsgMatchmakingClient2GCHello | Self.protoMask))
+        gcMessage.writeBytes(3, inner)
 
         try await send(
             Self.emsgClientToGC,
@@ -598,6 +663,56 @@ public actor GameCoordinatorClient {
                 let inspections = GameCoordinatorDecoder.decodeWelcome(welcome)
                 gcInfo("GC decoded \(inspections.count) item inspections")
                 return inspections
+            }
+        }
+    }
+
+    /// Receives until the GC sends MatchmakingGC2ClientHello (9110), then
+    /// decodes the player's ranked ladders from it.
+    private func awaitRankingAndDecode() async throws -> [PlayerRankingInfo] {
+        while true {
+            for frame in try await receiveFrames(timeout: 15) {
+                if let eresult = Self.loggedOffResult(frame) {
+                    gcInfo("GC ranking logged off: EResult \(eresult)")
+                    throw Self.loggedOffError(eresult)
+                }
+                guard frame.emsg == Self.emsgClientFromGC else {
+                    gcInfo("GC ranking awaiting: skipping emsg=\(frame.emsg)")
+                    continue
+                }
+
+                var gcDecoder = ProtobufDecoder(frame.body)
+                var msgtype: UInt32 = 0
+                var payload = Data()
+                while let (field, wire) = gcDecoder.readTag() {
+                    switch field {
+                    case 2:
+                        if let value = gcDecoder.readVarint() {
+                            msgtype = UInt32(truncatingIfNeeded: value)
+                        }
+                    case 3:
+                        if let value = gcDecoder.readLengthDelimited() { payload = value }
+                    default:
+                        gcDecoder.skip(wireType: wire)
+                    }
+                }
+
+                let innerType = msgtype & ~Self.protoMask
+                gcInfo("GC ranking ClientFromGC innerType=\(innerType)")
+                guard innerType == Self.emsgMatchmakingGC2ClientHello else { continue }
+
+                gcInfo("GC received MatchmakingGC2ClientHello")
+                guard let headerLen = payload.readUInt32LE(at: 4) else {
+                    throw GameCoordinatorError.malformedResponse("GC ranking frame too short")
+                }
+                let bodyStart = 8 + Int(headerLen)
+                guard bodyStart <= payload.count else {
+                    throw GameCoordinatorError.malformedResponse("GC ranking header overruns payload")
+                }
+                let body = payload.subdata(in: bodyStart..<payload.count)
+                let rankings = GameCoordinatorDecoder.decodeMatchmakingHello(body)
+                gcInfo("GC decoded \(rankings.count) ranking entries")
+                return rankings
             }
         }
     }
