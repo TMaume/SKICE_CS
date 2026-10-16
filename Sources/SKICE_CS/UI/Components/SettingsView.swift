@@ -7,6 +7,7 @@ public struct SettingsView: View {
     let authSession: SteamAuthSession
 
     @AppStorage("isDeveloperModeEnabled") private var isDeveloperModeEnabled: Bool = false
+    @AppStorage(DebugLogger.extensiveGCLoggingKey) private var extensiveGCLoggingEnabled: Bool = false
     @State private var logger = DebugLogger.shared
     @State private var didCopyLogs: Bool = false
 
@@ -405,6 +406,8 @@ public struct SettingsView: View {
 
             developerModeToggleCard
 
+            extensiveGCLoggingToggleCard
+
             if isDeveloperModeEnabled {
                 developerDiagnosticsCard
             }
@@ -448,6 +451,25 @@ public struct SettingsView: View {
         }
         .tacticalCard(
             accentBorder: isDeveloperModeEnabled ? AppTheme.Colors.csOrange.opacity(0.45) : nil
+        )
+    }
+
+    private var extensiveGCLoggingToggleCard: some View {
+        Toggle(isOn: $extensiveGCLoggingEnabled.animation(.snappy(duration: 0.2))) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Extensive GC Logging")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                Text("Logs verbose Game Coordinator wire frames, token claims, and decode traces. Off by default to keep the debug console clean.")
+                    .font(AppTheme.Fonts.bodyRegular)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+        }
+        .tint(AppTheme.Colors.csOrange)
+        .padding(14)
+        .tacticalCard(
+            accentBorder: extensiveGCLoggingEnabled ? AppTheme.Colors.csOrange.opacity(0.45) : nil
         )
     }
 

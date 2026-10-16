@@ -38,6 +38,16 @@ public enum GameCoordinatorError: LocalizedError, Sendable {
     }
 }
 
+// MARK: - Extensive GC logging
+
+/// Logs a verbose Game Coordinator diagnostic only when "Extensive GC Logging"
+/// is enabled (Settings > Developer). Errors and warnings always log; this gate
+/// keeps the debug console from being flooded by wire frames and decode traces.
+private func gcInfo(_ message: String) {
+    guard DebugLogger.extensiveGCLoggingEnabled else { return }
+    DebugLogger.shared.info(message, category: "GameCoordinator")
+}
+
 // MARK: - Little-endian framing helpers
 
 extension Data {
@@ -75,7 +85,7 @@ final class GCWebSocketSessionDelegate: NSObject, URLSessionWebSocketDelegate {
         webSocketTask: URLSessionWebSocketTask,
         didOpenWithProtocol protocol: String?
     ) {
-        DebugLogger.shared.info("GC WebSocket opened", category: "GameCoordinator")
+        gcInfo("GC WebSocket opened")
     }
 
     func urlSession(
@@ -85,9 +95,8 @@ final class GCWebSocketSessionDelegate: NSObject, URLSessionWebSocketDelegate {
         reason: Data?
     ) {
         let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "nil"
-        DebugLogger.shared.info(
-            "GC WebSocket closed: code=\(closeCode.rawValue) reason=\(reasonText)",
-            category: "GameCoordinator"
+        gcInfo(
+            "GC WebSocket closed: code=\(closeCode.rawValue) reason=\(reasonText)"
         )
     }
 
@@ -149,11 +158,11 @@ public actor GameCoordinatorClient {
         currentSteamID = steamID64
         currentSessionID = 0
 
-        DebugLogger.shared.info("GC start: steamID64=\(steamID64)", category: "GameCoordinator")
+        gcInfo("GC start: steamID64=\(steamID64)")
         Self.logTokenClaims(refreshToken)
 
         let endpoint = try await Self.fetchCMWebSocketEndpoint()
-        DebugLogger.shared.info("GC using CM endpoint \(endpoint)", category: "GameCoordinator")
+        gcInfo("GC using CM endpoint \(endpoint)")
         guard let url = URL(string: "wss://" + endpoint + "/cmsocket/") else {
             throw GameCoordinatorError.noCMReachable
         }
@@ -170,16 +179,16 @@ public actor GameCoordinatorClient {
         socket = ws
         ws.resume()
 
-        DebugLogger.shared.info("GC sending ClientLogon", category: "GameCoordinator")
+        gcInfo("GC sending ClientLogon")
         try await sendLogon(refreshToken: refreshToken)
-        DebugLogger.shared.info("GC ClientLogon sent", category: "GameCoordinator")
+        gcInfo("GC ClientLogon sent")
         let heartbeatSeconds = try await awaitLogonResponse()
         startHeartbeat(interval: max(heartbeatSeconds, 10))
 
         try await sendGamesPlayed()
         try await sendGCHello()
 
-        DebugLogger.shared.info("GC awaiting ClientWelcome", category: "GameCoordinator")
+        gcInfo("GC awaiting ClientWelcome")
         return try await awaitWelcomeAndDecode()
     }
 
@@ -207,7 +216,7 @@ public actor GameCoordinatorClient {
         let aud = json["aud"] ?? "nil"
         let exp = json["exp"] ?? "nil"
         let iss = json["iss"] ?? "nil"
-        DebugLogger.shared.info("GC token claims: iss=\(iss) sub=\(sub) aud=\(aud) exp=\(exp)", category: "GameCoordinator")
+        gcInfo("GC token claims: iss=\(iss) sub=\(sub) aud=\(aud) exp=\(exp)")
     }
 
     // MARK: - Send helpers
@@ -229,7 +238,7 @@ public actor GameCoordinatorClient {
         frame.appendUInt32LE(UInt32(header.data.count))
         frame.append(header.data)
         frame.append(body.data)
-        DebugLogger.shared.info("GC send emsg=\(emsg) frame=\(frame.hexPrefix())", category: "GameCoordinator")
+        gcInfo("GC send emsg=\(emsg) frame=\(frame.hexPrefix())")
         do {
             try await socket.send(.data(frame))
         } catch {
@@ -309,10 +318,10 @@ public actor GameCoordinatorClient {
     private func receiveFrames(timeout: TimeInterval) async throws -> [(emsg: UInt32, header: Data, body: Data)] {
         guard let socket else { throw GameCoordinatorError.disconnected("not connected") }
         let data = try await Self.receive(socket, timeout: timeout)
-        DebugLogger.shared.info("GC recv \(data.hexPrefix())", category: "GameCoordinator")
+        gcInfo("GC recv \(data.hexPrefix())")
         let frames = Self.expandFrames(data)
         for frame in frames {
-            DebugLogger.shared.info("GC frame emsg=\(frame.emsg) headerLen=\(frame.header.count) bodyLen=\(frame.body.count)", category: "GameCoordinator")
+            gcInfo("GC frame emsg=\(frame.emsg) headerLen=\(frame.header.count) bodyLen=\(frame.body.count)")
         }
         return frames
     }
@@ -354,12 +363,12 @@ public actor GameCoordinatorClient {
             }
         }
 
-        DebugLogger.shared.info("GC multi: sizeUnzipped=\(sizeUnzipped) body=\(messageBody.count) bytes", category: "GameCoordinator")
+        gcInfo("GC multi: sizeUnzipped=\(sizeUnzipped) body=\(messageBody.count) bytes")
 
         var payload = messageBody
         if sizeUnzipped != 0 {
             if let inflated = gunzip(payload) {
-                DebugLogger.shared.info("GC multi gunzipped \(payload.count) -> \(inflated.count) bytes", category: "GameCoordinator")
+                gcInfo("GC multi gunzipped \(payload.count) -> \(inflated.count) bytes")
                 payload = inflated
             } else {
                 DebugLogger.shared.warning("GC multi gunzip failed, using raw payload", category: "GameCoordinator")
@@ -383,7 +392,7 @@ public actor GameCoordinatorClient {
             }
             offset = end
         }
-        DebugLogger.shared.info("GC multi yielded \(frames.count) sub-frames", category: "GameCoordinator")
+        gcInfo("GC multi yielded \(frames.count) sub-frames")
         return frames
     }
 
@@ -508,11 +517,11 @@ public actor GameCoordinatorClient {
         while true {
             for frame in try await receiveFrames(timeout: 15) {
                 if let eresult = Self.loggedOffResult(frame) {
-                    DebugLogger.shared.info("GC logged off during logon: EResult \(eresult)", category: "GameCoordinator")
+                    gcInfo("GC logged off during logon: EResult \(eresult)")
                     throw Self.loggedOffError(eresult)
                 }
                 guard frame.emsg == Self.emsgClientLogOnResponse else {
-                    DebugLogger.shared.info("GC awaitLogon: skipping emsg=\(frame.emsg)", category: "GameCoordinator")
+                    gcInfo("GC awaitLogon: skipping emsg=\(frame.emsg)")
                     continue
                 }
 
@@ -538,7 +547,7 @@ public actor GameCoordinatorClient {
                     }
                 }
 
-                DebugLogger.shared.info("GC logon response: EResult \(eresult) heartbeat \(heartbeatSeconds)", category: "GameCoordinator")
+                gcInfo("GC logon response: EResult \(eresult) heartbeat \(heartbeatSeconds)")
                 guard eresult == 1 else { throw GameCoordinatorError.logonDenied(eresult) }
                 return heartbeatSeconds
             }
@@ -549,11 +558,11 @@ public actor GameCoordinatorClient {
         while true {
             for frame in try await receiveFrames(timeout: 15) {
                 if let eresult = Self.loggedOffResult(frame) {
-                    DebugLogger.shared.info("GC logged off during welcome: EResult \(eresult)", category: "GameCoordinator")
+                    gcInfo("GC logged off during welcome: EResult \(eresult)")
                     throw Self.loggedOffError(eresult)
                 }
                 guard frame.emsg == Self.emsgClientFromGC else {
-                    DebugLogger.shared.info("GC awaitWelcome: skipping emsg=\(frame.emsg)", category: "GameCoordinator")
+                    gcInfo("GC awaitWelcome: skipping emsg=\(frame.emsg)")
                     continue
                 }
 
@@ -574,10 +583,10 @@ public actor GameCoordinatorClient {
                 }
 
                 let innerType = msgtype & ~Self.protoMask
-                DebugLogger.shared.info("GC ClientFromGC innerType=\(innerType)", category: "GameCoordinator")
+                gcInfo("GC ClientFromGC innerType=\(innerType)")
                 guard innerType == Self.emsgGCClientWelcome else { continue }
 
-                DebugLogger.shared.info("GC received ClientWelcome", category: "GameCoordinator")
+                gcInfo("GC received ClientWelcome")
                 guard let headerLen = payload.readUInt32LE(at: 4) else {
                     throw GameCoordinatorError.malformedResponse("GC welcome frame too short")
                 }
@@ -587,7 +596,7 @@ public actor GameCoordinatorClient {
                 }
                 let welcome = payload.subdata(in: welcomeStart..<payload.count)
                 let inspections = Self.decodeWelcome(welcome)
-                DebugLogger.shared.info("GC decoded \(inspections.count) item inspections", category: "GameCoordinator")
+                gcInfo("GC decoded \(inspections.count) item inspections")
                 return inspections
             }
         }
@@ -622,9 +631,8 @@ public actor GameCoordinatorClient {
                 decoder.skip(wireType: wire)
             }
         }
-        DebugLogger.shared.info(
-            "GC decodeWelcome: \(cacheCount) caches, \(inspections.count) item inspections",
-            category: "GameCoordinator"
+        gcInfo(
+            "GC decodeWelcome: \(cacheCount) caches, \(inspections.count) item inspections"
         )
         return inspections
     }
@@ -667,9 +675,9 @@ public actor GameCoordinatorClient {
                     inspections.append(inspection)
                 }
             }
-            DebugLogger.shared.info("GC inventory cache: \(objects.count) items", category: "GameCoordinator")
+            gcInfo("GC inventory cache: \(objects.count) items")
         default:
-            DebugLogger.shared.info("GC subscribed type \(typeID) skipped (\(objects.count) objects)", category: "GameCoordinator")
+            gcInfo("GC subscribed type \(typeID) skipped (\(objects.count) objects)")
         }
     }
 
@@ -887,7 +895,7 @@ public actor GameCoordinatorClient {
         if let response = try? await APIClient.shared.send(request),
            let envelope = try? JSONDecoder().decode(CMListEnvelope.self, from: response.data),
            let list = envelope.response?.serverlist, !list.isEmpty {
-            DebugLogger.shared.info("GC CM list: \(list.count) servers", category: "GameCoordinator")
+            gcInfo("GC CM list: \(list.count) servers")
             let candidates = list.filter {
                 $0.type == "websockets" && $0.realm == "steamglobal" && $0.endpoint.hasSuffix(":443")
             }

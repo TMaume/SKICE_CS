@@ -69,6 +69,17 @@ public final class DebugLogger: @unchecked Sendable {
 
     public static let maxEntries: Int = 200
 
+    /// UserDefaults key for the "Extensive GC Logging" developer toggle.
+    public static let extensiveGCLoggingKey = "isExtensiveGCLoggingEnabled"
+
+    /// True when verbose Game Coordinator diagnostics (wire frames, token
+    /// claims, decode traces) are enabled. Off by default so the debug console
+    /// isn't flooded; enable from Settings > Developer to diagnose logon or
+    /// decode issues.
+    public static var extensiveGCLoggingEnabled: Bool {
+        UserDefaults.standard.bool(forKey: extensiveGCLoggingKey)
+    }
+
     /// Observable list of log entries (newest first for quick inspection).
     public private(set) var entries: [DebugLogEntry] = []
 
