@@ -61,7 +61,7 @@ public struct ProfileView: View {
         .task(id: sessionStore.storedSteamID64) {
             rankModel.loadHistory(for: sessionStore.storedSteamID64)
             await statsModel.loadStatsIfNeeded(explicitSteamID64: sessionStore.storedSteamID64)
-            if sessionStore.hasStoredAPIKey {
+            if sessionStore.hasStoredAPIKey, sessionStore.shouldAutoSyncProfile {
                 await sessionStore.syncProfileFromSteamWebAPI()
             }
             await autoSyncRank()

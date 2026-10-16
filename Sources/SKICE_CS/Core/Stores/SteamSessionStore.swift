@@ -141,6 +141,7 @@ public final class SteamSessionStore {
 
             activeProfile = player
             Self.saveCachedProfile(player, for: steamID)
+            UserDefaults.standard.set(Date(), forKey: Self.lastProfileSyncKey)
             statusMessage = "Steam profile synced directly from Valve servers."
         } catch {
             errorMessage = "Direct-to-API sync failed: \(error.localizedDescription)"
@@ -148,6 +149,17 @@ public final class SteamSessionStore {
     }
 
     // MARK: - Local profile cache
+
+    private static let lastProfileSyncKey = "com.dtl21.SKICEcs.lastProfileSyncAt"
+
+    /// True when the profile should be auto-synced: never synced yet, or the
+    /// last sync is older than one hour.
+    public var shouldAutoSyncProfile: Bool {
+        guard let last = UserDefaults.standard.object(forKey: Self.lastProfileSyncKey) as? Date else {
+            return true
+        }
+        return Date().timeIntervalSince(last) >= 3_600
+    }
 
     private static func profileCacheKey(_ steamID64: String) -> String {
         "com.dtl21.SKICEcs.cachedProfile." + steamID64
