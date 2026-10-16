@@ -506,11 +506,6 @@ public struct SteamAuthClient: Sendable {
 
 // MARK: - Wire models
 
-/// Steam's response envelope: {"response": {...}}
-public struct SteamAPIEnvelope<Payload: Decodable & Sendable>: Decodable, Sendable {
-    public let response: Payload?
-}
-
 /// Decodes a uint64 that Steam may render either as a JSON number or a string.
 public struct SteamUInt64: Decodable, Sendable {
     public let value: UInt64

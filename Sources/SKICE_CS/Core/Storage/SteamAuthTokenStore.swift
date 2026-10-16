@@ -1,23 +1,5 @@
 import Foundation
 
-/// Errors raised by the persisted Steam session.
-public enum SteamSessionError: LocalizedError, Sendable {
-    case noRefreshToken
-    case noSteamID
-    case accessTokenNotAJWT
-
-    public var errorDescription: String? {
-        switch self {
-        case .noRefreshToken:
-            return "No Steam refresh token is stored on this device."
-        case .noSteamID:
-            return "The Steam session does not record an account SteamID64."
-        case .accessTokenNotAJWT:
-            return "The Steam access token is not a decodable JWT."
-        }
-    }
-}
-
 /// Keychain-backed storage for the Tier B Steam session (refresh token, access
 /// token, account identity, guard data).
 ///

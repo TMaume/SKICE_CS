@@ -48,24 +48,6 @@ public struct PriceTable: Codable, Sendable {
     }
 }
 
-/// Transport/source errors raised by \`PriceService\`.
-public enum PriceServiceError: LocalizedError, Sendable {
-    case badStatus(Int)
-    case decoding(String)
-    case network(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case .badStatus(let code):
-            return "Steam Market price request failed (HTTP \(code))."
-        case .decoding(let details):
-            return "Failed to parse Steam Market price response: \(details)"
-        case .network(let details):
-            return "Network error while fetching Steam Market prices: \(details)"
-        }
-    }
-}
-
 /// Fetches Steam Community Market prices (EUR) for a set of \`market_hash_name\`
 /// values and caches the result locally for ~24h.
 ///

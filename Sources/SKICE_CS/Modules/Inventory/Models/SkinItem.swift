@@ -1,9 +1,6 @@
 import Foundation
 import SwiftUI
 
-/// Typealias for convenience across modules.
-public typealias CSItem = SkinItem
-
 /// Standard CS2 item rarity tiers ordered from lowest to highest grade.
 public enum SkinRarity: String, CaseIterable, Codable, Sendable, Comparable {
     case defaultRarity = "Default"

@@ -1,13 +1,5 @@
 import Foundation
 
-/// Wire types of the protobuf binary format.
-public enum ProtobufWireType: UInt8, Sendable {
-    case varint = 0
-    case fixed64 = 1
-    case lengthDelimited = 2
-    case fixed32 = 5
-}
-
 /// Minimal protobuf wire-format reader, hand-rolled to keep the package free of
 /// any SPM dependency (ROADMAP ADR-06). Complements `ProtobufEncoder`.
 ///
