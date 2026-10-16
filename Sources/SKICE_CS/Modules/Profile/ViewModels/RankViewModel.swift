@@ -14,6 +14,13 @@ public final class RankViewModel {
     /// When the ranking was last refreshed from the Game Coordinator.
     public private(set) var lastUpdated: Date?
 
+    /// True when the rating should be auto-refreshed: never refreshed yet, or
+    /// the last refresh is older than one hour.
+    public var shouldAutoRefresh: Bool {
+        guard let lastUpdated else { return true }
+        return Date().timeIntervalSince(lastUpdated) >= 3_600
+    }
+
     private let client: GameCoordinatorClient
     private let store: RatingSnapshotStore
 

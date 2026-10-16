@@ -64,7 +64,7 @@ public struct ProfileView: View {
             if sessionStore.hasStoredAPIKey {
                 await sessionStore.syncProfileFromSteamWebAPI()
             }
-            await syncRank()
+            await autoSyncRank()
         }
     }
 
@@ -436,6 +436,11 @@ public struct ProfileView: View {
             .font(AppTheme.Fonts.captionMono)
             .foregroundStyle(AppTheme.Colors.textSecondary)
         }
+    }
+
+    private func autoSyncRank() async {
+        guard rankModel.shouldAutoRefresh else { return }
+        await syncRank()
     }
 
     private func syncRank() async {
